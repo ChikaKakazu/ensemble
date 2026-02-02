@@ -21,16 +21,17 @@ Phase 2: 通信基盤 + 並列実行
   - [x] `/status` コマンド実装済み
 
 ## 進行中
-- [ ] Phase 2: 通信基盤 + 並列実行
-  - [ ] 2.2.1 dispatch.mdエージェント定義
-  - [ ] 2.2.2 reviewer.mdエージェント定義
-  - [ ] 2.2.3 アトミックロック実装 (src/ensemble/lock.py)
-  - [ ] 2.2.4 キュー操作実装 (src/ensemble/queue.py)
-  - [ ] 2.2.5 ログ出力実装 (src/ensemble/logger.py)
-  - [ ] 2.2.6 pane-setup.sh実装
-  - [ ] 2.2.7 launch.sh実装（Dispatch起動 + queue/クリーンアップ）
-  - [ ] 2.2.8 ACK機構実装 (src/ensemble/ack.py)
-  - [ ] 2.2.9 dashboard更新ロジック (src/ensemble/dashboard.py)
+- [ ] Phase 2: 通信基盤 + 並列実行（コア実装完了、統合テスト待ち）
+  - [x] 2.2.1 dispatch.mdエージェント定義 ✅
+  - [x] 2.2.2 reviewer.mdエージェント定義 ✅
+  - [x] 2.2.3 アトミックロック実装 (src/ensemble/lock.py) ✅
+  - [x] 2.2.4 キュー操作実装 (src/ensemble/queue.py) ✅
+  - [x] 2.2.5 ログ出力実装 (src/ensemble/logger.py) ✅
+  - [x] 2.2.6 pane-setup.sh実装 ✅
+  - [x] 2.2.7 launch.sh実装（Dispatch起動 + queue/クリーンアップ） ✅
+  - [x] 2.2.8 ACK機構実装 (src/ensemble/ack.py) ✅
+  - [x] 2.2.9 dashboard更新ロジック (src/ensemble/dashboard.py) ✅
+  - [ ] 2.2.10 統合テスト（launch.sh実行確認）
 
 ## 未着手
 - [ ] Phase 3: 並列レビュー
@@ -46,13 +47,19 @@ Phase 2: 通信基盤 + 並列実行
 | /go コマンド | ✅ 動作確認済み | パターンA正常動作 |
 | settings.json hooks | ⚠️ 要修正 | フォーマットエラー、Phase 2で対応 |
 | ワークフロー実行方式 | 決定済み | Claudeが状態遷移、Pythonは集約ユーティリティ |
-| ロック機構 | 決定済み | アトミックmv操作 |
-| ログ形式 | 決定済み | コンソール=テキスト、ファイル=JSON |
+| ロック機構 | ✅ 実装済み | アトミックmv操作、lock.py |
+| ログ形式 | ✅ 実装済み | コンソール=テキスト、ファイル=JSON、logger.py |
+| キュー操作 | ✅ 実装済み | queue.py (10テスト、94%カバレッジ) |
+| ACK機構 | ✅ 実装済み | ack.py (8テスト、100%カバレッジ) |
+| ダッシュボード | ✅ 実装済み | dashboard.py (8テスト、100%カバレッジ) |
+| Phase 2 テスト | ✅ 54テストパス | 全体カバレッジ94% |
 
 ## 次のアクション
-1. Phase 2のTDD開始
-   - `src/ensemble/logger.py` から着手
+1. Phase 2 統合テスト
+   - `./scripts/launch.sh` 実行確認
+   - 3ウィンドウ起動（Conductor + Dispatch + Dashboard）確認
 2. settings.json の hooks フォーマット修正
+3. Phase 3 開始（並列レビュー）
 
 ## セルフホスティング移行ポイント
 Phase 2完了後、Ensemble自身でEnsembleの開発が可能になります。
