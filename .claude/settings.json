@@ -17,5 +17,29 @@
       "Skill(*)",
       "Task(*)"
     ]
+  },
+  "hooks": {
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[Ensemble] コンパクション実行。再開時は自分のペイン名を確認し、エージェント定義を読み直すこと'",
+            "statusMessage": "コンパクション前処理"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat status/dashboard.md 2>/dev/null || echo 'Dashboard not found'",
+            "statusMessage": "ダッシュボード読み込み"
+          }
+        ]
+      }
+    ]
   }
 }

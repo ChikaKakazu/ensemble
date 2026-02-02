@@ -1,7 +1,7 @@
 # PROGRESS.md
 
 ## 現在のフェーズ
-Phase 3: 並列レビュー
+Phase 4: git worktree統合
 
 ## 完了済み
 - [x] Phase 1: 基盤構築（全タスク完了 ✅）
@@ -32,16 +32,23 @@ Phase 3: 並列レビュー
   - [x] 2.2.9 dashboard更新ロジック (src/ensemble/dashboard.py) ✅
   - [x] 2.2.10 統合テスト（launch.sh実行確認） ✅
 
+- [x] Phase 3: 並列レビュー（全タスク完了 ✅）
+  - [x] 3.2.1 security-reviewer.md エージェント定義 ✅
+  - [x] 3.2.2 default.yaml（parallel step）既に定義済み ✅
+  - [x] 3.2.3 simple.yaml 既に定義済み ✅
+  - [x] 3.2.4 集約ロジックユーティリティ (src/ensemble/workflow.py) ✅ (17テスト、82%カバレッジ)
+  - [x] 3.2.5 /reviewコマンド実装 ✅
+
 ## 進行中
-- [ ] Phase 3: 並列レビュー
-  - [ ] 3.2.1 security-reviewer.md エージェント定義
-  - [ ] 3.2.2 default.yaml（parallel step）更新
-  - [ ] 3.2.3 simple.yaml 更新
-  - [ ] 3.2.4 集約ロジックユーティリティ (src/ensemble/workflow.py)
-  - [ ] 3.2.5 /reviewコマンド実装
+- [ ] Phase 4: git worktree統合
+  - [ ] 4.2.1 integrator.md エージェント定義
+  - [ ] 4.2.2 worktree-manager skill
+  - [ ] 4.2.3 worktree-create.sh
+  - [ ] 4.2.4 worktree-merge.sh
+  - [ ] 4.2.5 worktree.yaml
+  - [ ] 4.2.6 コンフリクト検出・報告 (src/ensemble/worktree.py)
 
 ## 未着手
-- [ ] Phase 4: git worktree統合
 - [ ] Phase 5: 自己改善 + コスト管理
 - [ ] Phase 6: GitHub Actions統合（オプション）
 
@@ -51,7 +58,7 @@ Phase 3: 並列レビュー
 | MAX_THINKING_TOKENS=0 | ✅ 動作確認済み | 正常に動作 |
 | setup.sh | ✅ 動作確認済み | 8/8 テストパス |
 | /go コマンド | ✅ 動作確認済み | パターンA正常動作 |
-| settings.json hooks | ⚠️ 要修正 | フォーマットエラー、Phase 3で対応 |
+| settings.json hooks | ✅ 修正済み | PreCompact, SessionStart hooks追加 |
 | ワークフロー実行方式 | 決定済み | Claudeが状態遷移、Pythonは集約ユーティリティ |
 | ロック機構 | ✅ 実装済み | アトミックmv操作、lock.py |
 | ログ形式 | ✅ 実装済み | コンソール=テキスト、ファイル=JSON、logger.py |
@@ -60,13 +67,15 @@ Phase 3: 並列レビュー
 | ダッシュボード | ✅ 実装済み | dashboard.py (8テスト、100%カバレッジ) |
 | Phase 2 テスト | ✅ 54テストパス | 全体カバレッジ94% |
 | Phase 2 統合テスト | ✅ 成功 | 3ウィンドウ起動、ログ出力、queue/クリーンアップ確認 |
+| Phase 3 テスト | ✅ 71テストパス | 全体カバレッジ91% |
+| workflow.py | ✅ 実装完了 | aggregate_results, parse_review_results, merge_findings |
 
 ## 次のアクション
-1. settings.json の hooks フォーマット修正
-2. Phase 3 開始（並列レビュー）
-   - security-reviewer.md 作成
-   - workflow.py 実装（TDD）
-   - /review コマンド実装
+1. Phase 4 開始（git worktree統合）
+   - integrator.md 作成
+   - worktree-manager skill
+   - worktree-create.sh / worktree-merge.sh
+   - worktree.yaml
 
 ## セルフホスティング移行ポイント
 Phase 2完了 ✅ → Ensemble自身でEnsembleの開発が可能になりました。
