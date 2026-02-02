@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Bash(git *)",
+      "Bash(tmux *)",
+      "Bash(npm *)",
+      "Bash(uv *)",
+      "Bash(pytest *)",
+      "Bash(cat *)",
+      "Bash(ls *)",
+      "Bash(mkdir *)",
+      "Skill(*)",
+      "Task(*)"
+    ]
+  }
+}
