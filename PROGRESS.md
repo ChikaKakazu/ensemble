@@ -1,7 +1,7 @@
 # PROGRESS.md
 
 ## 現在のフェーズ
-Phase 4: git worktree統合
+Phase 5: 自己改善 + コスト管理（完了）
 
 ## 完了済み
 - [x] Phase 1: 基盤構築（全タスク完了 ✅）
@@ -47,15 +47,14 @@ Phase 4: git worktree統合
   - [x] 4.2.5 worktree.yaml ✅
   - [x] 4.2.6 コンフリクト検出・報告 (src/ensemble/worktree.py) ✅ (19テスト、89%カバレッジ)
 
-## 進行中
+- [x] Phase 5: 自己改善 + コスト管理（全タスク完了 ✅）
+  - [x] 5.2.1 learner.md エージェント定義 ✅
+  - [x] 5.2.2 /improveコマンド ✅
+  - [x] 5.2.3 heavy.yaml ✅
+  - [x] 5.2.4 学習ノート構造 (src/ensemble/notes.py) ✅ (19テスト、93%カバレッジ)
+  - [x] 5.2.5 コスト意識のWF選択ロジック ✅
 
 ## 進行中
-- [ ] Phase 5: 自己改善 + コスト管理
-  - [ ] 5.2.1 learner.md エージェント定義
-  - [ ] 5.2.2 /improveコマンド
-  - [ ] 5.2.3 heavy.yaml
-  - [ ] 5.2.4 学習ノート構造 (src/ensemble/notes.py)
-  - [ ] 5.2.5 コスト意識のWF選択ロジック
 
 ## 未着手
 - [ ] Phase 6: GitHub Actions統合（オプション）
@@ -79,13 +78,17 @@ Phase 4: git worktree統合
 | workflow.py | ✅ 実装完了 | aggregate_results, parse_review_results, merge_findings |
 | Phase 4 テスト | ✅ 90テストパス | 全体カバレッジ90% |
 | worktree.py | ✅ 実装完了 | list_worktrees, detect_conflicts, is_auto_resolvable |
+| Phase 5 テスト | ✅ 109テストパス | 全体カバレッジ91% |
+| notes.py | ✅ 実装完了 | create_task_notes_dir, write_lessons, read_lessons など |
+| learner.md | ✅ 作成完了 | 自己改善エージェント定義 |
+| heavy.yaml | ✅ 作成完了 | 5段階並列レビュー |
 
 ## 次のアクション
-1. Phase 5 開始（自己改善 + コスト管理）
-   - learner.md 作成
-   - /improve コマンド実装
-   - heavy.yaml 作成
-   - notes.py 実装（学習ノート構造）
+1. Phase 6 開始（GitHub Actions統合）※オプション
+   - ensemble-action.yml 作成
+   - @ensemble run 対応
+   - ワークフロー選択（simple/default）
+   - PR自動作成
 
 ## セルフホスティング移行ポイント
 Phase 2完了 ✅ → Ensemble自身でEnsembleの開発が可能になりました。
