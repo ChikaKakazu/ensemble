@@ -1,0 +1,202 @@
+name: worktree
+description: |
+  git worktree統合ワークフロー。
+  複数の独立した機能を並列開発し、最終的にメインブランチに統合する。
+  大規模タスク（パターンC）向け。
+max_iterations: 20
+cost_level: high
+
+steps:
+  - name: plan
+    description: タスク分析とworktree分割計画の策定
+    agent: conductor
+    mode: plan
+    thinking: false
+    outputs:
+      - plan.md
+      - worktree-breakdown.md
+    transitions:
+      - condition: plan_approved
+        next_step: create_worktrees
+      - condition: needs_clarification
+        next_step: PAUSE
+
+  - name: create_worktrees
+    description: |
+      計画に基づきworktreeを作成。
+      各worktreeで独立したブランチを用意。
+    agent: conductor
+    mode: execute
+    script: |
+      for branch in $WORKTREE_BRANCHES; do
+        ./scripts/worktree-create.sh "$branch" main
+      done
+    transitions:
+      - condition: worktrees_created
+        next_step: parallel_develop
+      - condition: creation_failed
+        next_step: PAUSE
+
+  - name: parallel_develop
+    description: 各worktreeで並列開発
+    parallel:
+      - name: worktree-1
+        agent: coder
+        worktree: true
+        rules:
+          - condition: complete
+          - condition: blocked
+        instruction_template: |
+          worktree内で担当機能を実装してください。
+          - TDDでテストファーストで開発
+          - コミットは細かく
+          - 完了したらqueue/reports/に報告
+
+      - name: worktree-2
+        agent: coder
+        worktree: true
+        rules:
+          - condition: complete
+          - condition: blocked
+
+      - name: worktree-3
+        agent: coder
+        worktree: true
+        rules:
+          - condition: complete
+          - condition: blocked
+
+    rules:
+      - condition: all("complete")
+        next_step: integrate
+      - condition: any("blocked")
+        next_step: resolve_blocked
+
+  - name: resolve_blocked
+    description: ブロックされたworktreeの問題を解決
+    agent: conductor
+    mode: execute
+    transitions:
+      - condition: resolved
+        next_step: parallel_develop
+      - condition: escalate
+        next_step: PAUSE
+
+  - name: integrate
+    description: 各worktreeをメインブランチに統合
+    agent: integrator
+    mode: execute
+    script: |
+      for worktree in $WORKTREE_PATHS; do
+        ./scripts/worktree-merge.sh "$worktree" main
+      done
+    transitions:
+      - condition: merge_success
+        next_step: cross_review
+      - condition: conflict_detected
+        next_step: resolve_conflict
+
+  - name: resolve_conflict
+    description: コンフリクト解決
+    agent: integrator
+    mode: execute
+    auto_resolve: true
+    transitions:
+      - condition: resolved
+        next_step: cross_review
+      - condition: needs_manual
+        next_step: escalate_conflict
+
+  - name: escalate_conflict
+    description: 手動解決が必要なコンフリクトをConductorに報告
+    agent: conductor
+    mode: execute
+    transitions:
+      - condition: manual_resolved
+        next_step: cross_review
+      - condition: abort
+        next_step: PAUSE
+
+  - name: cross_review
+    description: 相互レビュー - 各担当が他の変更をレビュー
+    parallel:
+      - name: review-1
+        agent: reviewer
+        scope: worktree-2,worktree-3
+        rules:
+          - condition: approved
+          - condition: needs_fix
+        instruction_template: |
+          自分が担当したworktree-1以外の変更をレビューしてください。
+
+      - name: review-2
+        agent: reviewer
+        scope: worktree-1,worktree-3
+        rules:
+          - condition: approved
+          - condition: needs_fix
+
+      - name: review-3
+        agent: reviewer
+        scope: worktree-1,worktree-2
+        rules:
+          - condition: approved
+          - condition: needs_fix
+
+    rules:
+      - condition: all("approved")
+        next_step: security_review
+      - condition: any("needs_fix")
+        next_step: fix_issues
+
+  - name: fix_issues
+    description: レビューで指摘された問題を修正
+    agent: conductor
+    mode: execute
+    transitions:
+      - condition: fixed
+        next_step: cross_review
+      - condition: needs_discussion
+        next_step: PAUSE
+
+  - name: security_review
+    description: 統合後のセキュリティレビュー
+    agent: security-reviewer
+    transitions:
+      - condition: approved
+        next_step: cleanup
+      - condition: needs_fix
+        next_step: fix_security
+
+  - name: fix_security
+    description: セキュリティ問題を修正
+    agent: conductor
+    mode: execute
+    transitions:
+      - condition: fixed
+        next_step: security_review
+
+  - name: cleanup
+    description: worktreeとブランチのクリーンアップ
+    agent: integrator
+    mode: execute
+    script: |
+      for worktree in $WORKTREE_PATHS; do
+        git worktree remove "$worktree"
+      done
+      for branch in $WORKTREE_BRANCHES; do
+        git branch -d "ensemble/$branch"
+      done
+    transitions:
+      - condition: done
+        next_step: improve
+
+  - name: improve
+    description: 自己改善フェーズ
+    agent: learner
+    outputs:
+      - notes/{task-id}/lessons.md
+      - notes/{task-id}/skill-candidates.md
+    transitions:
+      - condition: done
+        next_step: COMPLETE

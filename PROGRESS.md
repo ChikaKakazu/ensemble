@@ -39,17 +39,25 @@ Phase 4: git worktree統合
   - [x] 3.2.4 集約ロジックユーティリティ (src/ensemble/workflow.py) ✅ (17テスト、82%カバレッジ)
   - [x] 3.2.5 /reviewコマンド実装 ✅
 
+- [x] Phase 4: git worktree統合（全タスク完了 ✅）
+  - [x] 4.2.1 integrator.md エージェント定義 ✅
+  - [x] 4.2.2 worktree-manager skill ✅
+  - [x] 4.2.3 worktree-create.sh ✅
+  - [x] 4.2.4 worktree-merge.sh ✅
+  - [x] 4.2.5 worktree.yaml ✅
+  - [x] 4.2.6 コンフリクト検出・報告 (src/ensemble/worktree.py) ✅ (19テスト、89%カバレッジ)
+
 ## 進行中
-- [ ] Phase 4: git worktree統合
-  - [ ] 4.2.1 integrator.md エージェント定義
-  - [ ] 4.2.2 worktree-manager skill
-  - [ ] 4.2.3 worktree-create.sh
-  - [ ] 4.2.4 worktree-merge.sh
-  - [ ] 4.2.5 worktree.yaml
-  - [ ] 4.2.6 コンフリクト検出・報告 (src/ensemble/worktree.py)
+
+## 進行中
+- [ ] Phase 5: 自己改善 + コスト管理
+  - [ ] 5.2.1 learner.md エージェント定義
+  - [ ] 5.2.2 /improveコマンド
+  - [ ] 5.2.3 heavy.yaml
+  - [ ] 5.2.4 学習ノート構造 (src/ensemble/notes.py)
+  - [ ] 5.2.5 コスト意識のWF選択ロジック
 
 ## 未着手
-- [ ] Phase 5: 自己改善 + コスト管理
 - [ ] Phase 6: GitHub Actions統合（オプション）
 
 ## 決定事項（実装中に判明したこと）
@@ -69,13 +77,15 @@ Phase 4: git worktree統合
 | Phase 2 統合テスト | ✅ 成功 | 3ウィンドウ起動、ログ出力、queue/クリーンアップ確認 |
 | Phase 3 テスト | ✅ 71テストパス | 全体カバレッジ91% |
 | workflow.py | ✅ 実装完了 | aggregate_results, parse_review_results, merge_findings |
+| Phase 4 テスト | ✅ 90テストパス | 全体カバレッジ90% |
+| worktree.py | ✅ 実装完了 | list_worktrees, detect_conflicts, is_auto_resolvable |
 
 ## 次のアクション
-1. Phase 4 開始（git worktree統合）
-   - integrator.md 作成
-   - worktree-manager skill
-   - worktree-create.sh / worktree-merge.sh
-   - worktree.yaml
+1. Phase 5 開始（自己改善 + コスト管理）
+   - learner.md 作成
+   - /improve コマンド実装
+   - heavy.yaml 作成
+   - notes.py 実装（学習ノート構造）
 
 ## セルフホスティング移行ポイント
 Phase 2完了 ✅ → Ensemble自身でEnsembleの開発が可能になりました。
