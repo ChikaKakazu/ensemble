@@ -1,0 +1,27 @@
+# Conductor → Dispatch 指示フォーマット
+# このファイルは queue/conductor/dispatch-instruction.yaml に書き込まれる
+
+# 指示タイプ
+# - start_workers: ワーカーペインを起動してタスクを配信
+# - start_worktree: git worktreeを作成してタスクを配信
+type: start_workers
+
+# ワーカー数（パターンBの場合）
+worker_count: 2
+
+# タスク一覧
+tasks:
+  - id: task-001
+    instruction: "タスクの説明"
+    files:
+      - "対象ファイル1"
+      - "対象ファイル2"
+  - id: task-002
+    instruction: "タスクの説明"
+    files:
+      - "対象ファイル"
+
+# メタデータ
+created_at: "2026-02-03T10:00:00Z"
+workflow: default
+pattern: B  # A, B, or C

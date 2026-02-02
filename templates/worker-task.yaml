@@ -1,0 +1,19 @@
+# Dispatch → Worker タスクフォーマット
+# このファイルは queue/tasks/worker-N-task.yaml に書き込まれる
+
+# タスクID（一意）
+id: task-001
+
+# タスクの説明
+instruction: "タスクの詳細な説明"
+
+# 対象ファイル（このファイルのみ編集可能）
+files:
+  - "対象ファイル1"
+  - "対象ファイル2"
+
+# ワークフロー
+workflow: default
+
+# メタデータ
+created_at: "2026-02-03T10:00:00Z"

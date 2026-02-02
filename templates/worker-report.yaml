@@ -1,0 +1,25 @@
+# Worker完了報告フォーマット
+# このファイルは queue/reports/{task-id}.yaml に書き込まれる
+
+# タスクID
+task_id: task-001
+
+# ステータス: success, failed, blocked
+status: success
+
+# ワーカーID
+worker_id: 1
+
+# 実行内容の要約
+summary: "実行した内容の要約を記載"
+
+# 変更したファイル
+files_modified:
+  - "変更したファイル1"
+  - "変更したファイル2"
+
+# エラー（あれば）
+errors: []
+
+# 完了時刻
+completed_at: "2026-02-03T10:30:00Z"

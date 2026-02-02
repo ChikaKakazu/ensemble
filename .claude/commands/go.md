@@ -2,13 +2,32 @@
 description: |
   Ensembleのメインコマンド。タスクを渡すとConductorが
   自律的に計画・実行・レビュー・改善まで行う。
+
+  使用例:
+    /go タスク内容              - 自動判定
+    /go --simple タスク内容     - パターンA強制（subagent直接）
+    /go --parallel タスク内容   - パターンB強制（tmux並列）
+    /go --worktree タスク内容   - パターンC強制（git worktree）
 ---
 
 以下のタスクをEnsembleのConductorとして実行してください。
 
-## タスク
+## 入力
 
 $ARGUMENTS
+
+## オプション解析
+
+入力から以下のオプションを検出してください:
+
+| オプション | 効果 |
+|-----------|------|
+| `--simple` | パターンAを強制（subagentで直接実行） |
+| `--parallel` | パターンBを強制（tmux並列実行） |
+| `--worktree` | パターンCを強制（git worktree分離） |
+| オプションなし | タスク内容から自動判定 |
+
+オプションが指定された場合、計画策定時のパターン判定をスキップし、指定されたパターンで実行してください。
 
 ## 実行手順
 
@@ -18,10 +37,10 @@ $ARGUMENTS
    - タスクの全体像と成功基準
    - タスク分解（サブタスク一覧）
    - コスト見積もり → ワークフロー選択（simple/default/heavy/worktree）
-   - 実行パターンの選択:
-     - **パターンA**: 変更ファイル ≤ 3 → subagentで直接実行
-     - **パターンB**: 変更ファイル 4〜10、並列可能 → tmux多ペイン
-     - **パターンC**: 機能独立、変更ファイル > 10 → git worktree分離
+   - 実行パターンの選択（オプション指定がない場合のみ自動判定）:
+     - **パターンA**: 変更ファイル ≤ 3 → subagentで直接実行（takt方式）
+     - **パターンB**: 変更ファイル 4〜10、並列可能 → tmux多ペイン（shogun方式）
+     - **パターンC**: 機能独立、変更ファイル > 10 → git worktree分離（shogun方式）
    - 必要なskills/agents/MCPの確認
 
 2. **計画をユーザーに確認**し、承認を得る
@@ -29,11 +48,26 @@ $ARGUMENTS
 ### Phase 2: 実行
 
 3. パターンに応じて実行:
-   - **パターンA**: サブエージェントを起動し、タスクを直接実行
-   - **パターンB**: Dispatchにtmuxペイン構成とタスク配信を指示
-   - **パターンC**: Dispatchにworktree作成とタスク配信を指示
 
-4. 実行中は `status/dashboard.md` を都度更新
+   **パターンA（takt方式）**:
+   - Taskツール（subagent）で直接実行
+   - Dispatch不要、Conductorが直接管理
+   - シンプルで高速
+
+   **パターンB（shogun方式）**:
+   1. `queue/conductor/dispatch-instruction.yaml` に指示を書く
+   2. `tmux send-keys -t ensemble:main.1 "新しい指示があります"` でDispatchに通知
+   3. Dispatchがpane-setup.shでワーカーペインを起動
+   4. 各ワーカーにタスクYAMLを配信
+   5. 完了報告を待機
+
+   **パターンC（shogun方式 + worktree）**:
+   1. `queue/conductor/dispatch-instruction.yaml` に指示を書く（type: worktree）
+   2. Dispatchがworktree-create.shでworktreeを作成
+   3. 各worktreeでワーカーを起動
+   4. 統合・相互レビュー後に完了
+
+4. 実行中は `status/dashboard.md` を都度更新（Dispatchが担当）
 
 ### Phase 3: レビュー
 

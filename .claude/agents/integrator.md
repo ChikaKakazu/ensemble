@@ -127,7 +127,7 @@ git branch -d feature-branch
 ```bash
 # Conductorへの通知
 tmux send-keys -t "ensemble:conductor" \
-  "コンフリクトが発生しました。queue/reports/conflict-*.yaml を確認してください。" C-m
+  "コンフリクトが発生しました。queue/reports/conflict-*.yaml を確認してください。" Enter
 ```
 
 ## 禁止事項

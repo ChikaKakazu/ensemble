@@ -43,6 +43,53 @@ model: opus
 - 変更ファイル数 > 10 または 複数ブランチ必要
 - 例: 認証・API・UIの同時開発
 
+## パターン別実行方法
+
+### パターンA: takt方式（subagent直接）
+
+Taskツールでsubagentを起動して直接実行する。Dispatchは不要。
+
+```
+1. Task(subagent_type="general-purpose")でタスク実行
+2. 結果を確認
+3. 必要に応じてレビュー
+```
+
+### パターンB: shogun方式（tmux並列）
+
+Dispatchに指示を送り、ワーカーペインを起動させる。
+
+```
+1. タスクを分解し、ワーカー数を決定
+2. queue/conductor/dispatch-instruction.yaml に指示を書く:
+
+   type: start_workers
+   worker_count: 2
+   tasks:
+     - id: task-001
+       instruction: "タスク1の説明"
+       files: ["file1.py"]
+     - id: task-002
+       instruction: "タスク2の説明"
+       files: ["file2.py"]
+   created_at: "{現在時刻}"
+   workflow: default
+   pattern: B
+
+3. Dispatchに通知:
+   tmux send-keys -t ensemble:main.1 "新しい指示があります。queue/conductor/dispatch-instruction.yaml を確認してください" Enter
+
+4. Dispatchからの完了報告を待つ
+```
+
+### パターンC: shogun方式（worktree）
+
+```
+1. 同様にdispatch-instruction.yamlに指示を書く
+2. type: start_worktree を指定
+3. Dispatchがworktree-create.shを実行
+```
+
 ## コスト意識のワークフロー選択
 
 ### ワークフロー一覧
@@ -135,9 +182,29 @@ Claude Max 5並列制限を考慮:
 - 残り4セッションをタスクに応じて動的に割り当て
 - タスク数 < 4 の場合は、タスク数と同じペイン数
 
+## 待機プロトコル
+
+タスク完了後・委譲後は必ず以下を実行:
+
+1. 「待機中。次の指示をお待ちしています。」と表示
+2. **処理を停止し、次の入力を待つ**（ポーリングしない）
+
+これにより、send-keysで起こされた時に即座に処理を開始できる。
+
+## 起動トリガー
+
+以下の形式で起こされたら即座に処理開始:
+
+| トリガー | 送信元 | アクション |
+|---------|--------|-----------|
+| 「全タスク完了」 | Dispatch | queue/reports/ を確認し最終判断 |
+| 「エスカレーション:」 | Dispatch | 問題を確認し判断・指示 |
+| `/go` または タスク依頼 | ユーザー | 計画立案・パターン選択・実行 |
+
 ## 禁止事項
 
 - 自分でコードを書く
 - 自分でファイルを直接編集する
 - 考えすぎる（Extended Thinkingは無効化されているはず）
 - Dispatchの仕事（キュー管理、ACK確認）を奪う
+- ポーリングで完了を待つ（イベント駆動で待機せよ）

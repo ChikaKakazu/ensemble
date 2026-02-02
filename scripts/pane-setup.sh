@@ -1,7 +1,24 @@
 #!/bin/bash
 # scripts/pane-setup.sh
-# ワーカーペインをセットアップする
+# ワーカーペインを既存のmainウィンドウに追加する（右側縦並び）
 # フレンドリーファイア防止のため3秒間隔で起動
+#
+# 初期レイアウト:
+# +------------------+----------+
+# |    conductor     |          |
+# |                  | dashboard|
+# +------------------+          |
+# |    dispatch      |          |
+# +------------------+----------+
+#
+# ワーカー追加後:
+# +------------------+----------+
+# |    conductor     | worker-1 |
+# |                  +----------+
+# +------------------+ worker-2 |
+# |    dispatch      +----------+
+# |                  | dashboard|
+# +------------------+----------+
 
 set -euo pipefail
 
@@ -15,39 +32,37 @@ if [ "$WORKER_COUNT" -gt 4 ]; then
     WORKER_COUNT=4
 fi
 
-echo "Setting up $WORKER_COUNT worker panes..."
+echo "Adding $WORKER_COUNT worker panes..."
 
-# ワーカーウィンドウ作成（存在しない場合）
-if ! tmux has-session -t "$SESSION:workers" 2>/dev/null; then
-    tmux new-window -t "$SESSION" -n "workers" -c "$PROJECT_DIR"
-fi
+# mainウィンドウを選択
+tmux select-window -t "$SESSION:main"
 
-# 最初のペインは既存のものを使用
+# 初期状態: pane 0=conductor, pane 1=dispatch, pane 2=dashboard
+# ワーカーを dashboard(2) の上に挿入する
+
 for i in $(seq 1 "$WORKER_COUNT"); do
-    PANE_NAME="worker-$i"
+    echo "Starting worker-$i..."
 
-    if [ "$i" -eq 1 ]; then
-        # 最初のワーカーは既存のペインを使用
-        tmux select-window -t "$SESSION:workers"
-    else
-        # 2つ目以降はペインを分割
-        tmux split-window -t "$SESSION:workers" -h -c "$PROJECT_DIR"
-
-        # レイアウトを均等に調整
-        tmux select-layout -t "$SESSION:workers" tiled
-    fi
+    # dashboard(pane 2)を上に分割してワーカーを追加
+    tmux split-window -v -t "$SESSION:main.2" -c "$PROJECT_DIR" -b
 
     # フレンドリーファイア防止
     sleep 3
 
-    # Claudeを起動（ワーカーモード）
-    tmux send-keys -t "$SESSION:workers" \
-        "claude --dangerously-skip-permissions" C-m
-
-    echo "Started $PANE_NAME"
+    # WORKER_ID環境変数を設定して、--agent workerでClaudeを起動
+    tmux send-keys -t "$SESSION:main.2" \
+        "export WORKER_ID=$i && claude --agent worker --dangerously-skip-permissions" Enter
 done
 
-# レイアウトを最終調整
-tmux select-layout -t "$SESSION:workers" tiled
+# 全ワーカーのClaude起動完了を待つ（各ワーカー約10秒）
+echo "Waiting for all workers to initialize..."
+sleep $((WORKER_COUNT * 10))
 
-echo "Worker panes setup complete: $WORKER_COUNT workers"
+# Conductorペインにフォーカスを戻す
+tmux select-pane -t "$SESSION:main.0"
+
+echo ""
+echo "Worker panes added: $WORKER_COUNT workers (ready for tasks)"
+echo ""
+echo "Current panes:"
+tmux list-panes -t "$SESSION:main" -F "  pane #{pane_index}: #{pane_width}x#{pane_height}"

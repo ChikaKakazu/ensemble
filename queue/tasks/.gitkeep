@@ -1,0 +1,2 @@
+# Dispatch → Worker タスク配信用ディレクトリ
+# worker-N-task.yaml がここに作成される
