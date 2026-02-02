@@ -1,7 +1,7 @@
 # PROGRESS.md
 
 ## 現在のフェーズ
-Phase 2: 通信基盤 + 並列実行
+Phase 3: 並列レビュー
 
 ## 完了済み
 - [x] Phase 1: 基盤構築（全タスク完了 ✅）
@@ -20,8 +20,7 @@ Phase 2: 通信基盤 + 並列実行
   - [x] `/go "hello world"` でPythonスクリプトが生成される ✅
   - [x] `/status` コマンド実装済み
 
-## 進行中
-- [ ] Phase 2: 通信基盤 + 並列実行（コア実装完了、統合テスト待ち）
+- [x] Phase 2: 通信基盤 + 並列実行（全タスク完了 ✅）
   - [x] 2.2.1 dispatch.mdエージェント定義 ✅
   - [x] 2.2.2 reviewer.mdエージェント定義 ✅
   - [x] 2.2.3 アトミックロック実装 (src/ensemble/lock.py) ✅
@@ -31,10 +30,17 @@ Phase 2: 通信基盤 + 並列実行
   - [x] 2.2.7 launch.sh実装（Dispatch起動 + queue/クリーンアップ） ✅
   - [x] 2.2.8 ACK機構実装 (src/ensemble/ack.py) ✅
   - [x] 2.2.9 dashboard更新ロジック (src/ensemble/dashboard.py) ✅
-  - [ ] 2.2.10 統合テスト（launch.sh実行確認）
+  - [x] 2.2.10 統合テスト（launch.sh実行確認） ✅
+
+## 進行中
+- [ ] Phase 3: 並列レビュー
+  - [ ] 3.2.1 security-reviewer.md エージェント定義
+  - [ ] 3.2.2 default.yaml（parallel step）更新
+  - [ ] 3.2.3 simple.yaml 更新
+  - [ ] 3.2.4 集約ロジックユーティリティ (src/ensemble/workflow.py)
+  - [ ] 3.2.5 /reviewコマンド実装
 
 ## 未着手
-- [ ] Phase 3: 並列レビュー
 - [ ] Phase 4: git worktree統合
 - [ ] Phase 5: 自己改善 + コスト管理
 - [ ] Phase 6: GitHub Actions統合（オプション）
@@ -45,7 +51,7 @@ Phase 2: 通信基盤 + 並列実行
 | MAX_THINKING_TOKENS=0 | ✅ 動作確認済み | 正常に動作 |
 | setup.sh | ✅ 動作確認済み | 8/8 テストパス |
 | /go コマンド | ✅ 動作確認済み | パターンA正常動作 |
-| settings.json hooks | ⚠️ 要修正 | フォーマットエラー、Phase 2で対応 |
+| settings.json hooks | ⚠️ 要修正 | フォーマットエラー、Phase 3で対応 |
 | ワークフロー実行方式 | 決定済み | Claudeが状態遷移、Pythonは集約ユーティリティ |
 | ロック機構 | ✅ 実装済み | アトミックmv操作、lock.py |
 | ログ形式 | ✅ 実装済み | コンソール=テキスト、ファイル=JSON、logger.py |
@@ -53,13 +59,14 @@ Phase 2: 通信基盤 + 並列実行
 | ACK機構 | ✅ 実装済み | ack.py (8テスト、100%カバレッジ) |
 | ダッシュボード | ✅ 実装済み | dashboard.py (8テスト、100%カバレッジ) |
 | Phase 2 テスト | ✅ 54テストパス | 全体カバレッジ94% |
+| Phase 2 統合テスト | ✅ 成功 | 3ウィンドウ起動、ログ出力、queue/クリーンアップ確認 |
 
 ## 次のアクション
-1. Phase 2 統合テスト
-   - `./scripts/launch.sh` 実行確認
-   - 3ウィンドウ起動（Conductor + Dispatch + Dashboard）確認
-2. settings.json の hooks フォーマット修正
-3. Phase 3 開始（並列レビュー）
+1. settings.json の hooks フォーマット修正
+2. Phase 3 開始（並列レビュー）
+   - security-reviewer.md 作成
+   - workflow.py 実装（TDD）
+   - /review コマンド実装
 
 ## セルフホスティング移行ポイント
-Phase 2完了後、Ensemble自身でEnsembleの開発が可能になります。
+Phase 2完了 ✅ → Ensemble自身でEnsembleの開発が可能になりました。
