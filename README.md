@@ -22,29 +22,95 @@ Ensemble is an AI orchestration system that combines the best practices from:
 - **Self-Improvement**: Automatic learning and CLAUDE.md updates
 - **Compaction Recovery**: Built-in protocol to prevent role amnesia
 
+## Installation
+
+### Using uv (recommended)
+
+```bash
+# Install globally
+uv tool install ensemble-ai
+
+# Or add to your project
+uv add ensemble-ai
+```
+
+### Using pip
+
+```bash
+pip install ensemble-ai
+```
+
+### From source
+
+```bash
+git clone https://github.com/ChikaKakazu/ensemble.git
+cd ensemble
+
+# Using uv
+uv pip install -e .
+
+# Or using pip
+pip install -e .
+```
+
 ## Quick Start
 
 ```bash
-# Setup
-./scripts/setup.sh
+# 1. Initialize Ensemble in your project
+ensemble init
 
-# Launch Claude Code with Conductor settings
-MAX_THINKING_TOKENS=0 claude --model opus
+# 2. Launch the tmux session with Conductor + Dispatch
+ensemble launch
 
-# Run a task
+# 3. Run a task (in the Conductor pane)
 /go implement user authentication
 
 # Light workflow (minimal cost)
 /go-light fix typo in README
 ```
 
+### CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `ensemble init` | Initialize Ensemble in current project |
+| `ensemble init --full` | Also copy agent/command definitions locally |
+| `ensemble launch` | Start tmux session with Conductor + Dispatch |
+| `ensemble launch --no-attach` | Start session without attaching |
+| `ensemble --version` | Show version |
+
 ## Requirements
 
-- Claude Code (claude command available)
+- Python 3.10+
+- Claude Code CLI (`claude` command available)
 - tmux
 - git 2.20+ (for worktree support)
 - Claude Max plan recommended (for parallel execution)
 
+## Agent Architecture
+
+```
+┌─────────────┐
+│  Conductor  │ ← Orchestrator (planning, judgment, delegation)
+└──────┬──────┘
+       │
+  ┌────┴────┐
+  ▼         ▼
+┌────────┐ ┌──────────┐
+│Dispatch│ │ Learner  │
+└───┬────┘ └──────────┘
+    │        ↑ Learning records
+    ▼
+┌─────────────────────────────┐
+│  Reviewer / Security-Reviewer│ ← Parallel reviews
+└─────────────────────────────┘
+    │
+    ▼ (worktree mode)
+┌──────────┐
+│Integrator│ ← Merge & integrate
+└──────────┘
+```
+
 ## License
 
-TBD
+MIT License - see [LICENSE](LICENSE) for details.
