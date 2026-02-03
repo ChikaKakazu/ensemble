@@ -76,10 +76,11 @@ Dispatchに指示を送り、ワーカーペインを起動させる。
    workflow: default
    pattern: B
 
-3. Dispatchに通知:
-   tmux send-keys -t ensemble:main.1 "新しい指示があります。queue/conductor/dispatch-instruction.yaml を確認してください" Enter
+3. Dispatchに通知（2回分割）:
+   tmux send-keys -t ensemble:main.1 '新しい指示があります。queue/conductor/dispatch-instruction.yaml を確認してください'
+   tmux send-keys -t ensemble:main.1 Enter
 
-4. Dispatchからの完了報告を待つ
+4. 完了を待つ（Dispatchからのsend-keysは来ない。status/dashboard.mdを確認）
 ```
 
 ### パターンC: shogun方式（worktree）
@@ -191,15 +192,21 @@ Claude Max 5並列制限を考慮:
 
 これにより、send-keysで起こされた時に即座に処理を開始できる。
 
-## 起動トリガー
+## 起動トリガーと完了確認
 
 以下の形式で起こされたら即座に処理開始:
 
 | トリガー | 送信元 | アクション |
 |---------|--------|-----------|
-| 「全タスク完了」 | Dispatch | queue/reports/ を確認し最終判断 |
-| 「エスカレーション:」 | Dispatch | 問題を確認し判断・指示 |
 | `/go` または タスク依頼 | ユーザー | 計画立案・パターン選択・実行 |
+
+### 完了確認方法（Dispatchからのsend-keysは来ない）
+
+Dispatchはsend-keysでConductorに報告しない。以下の方法で完了を確認:
+1. `status/dashboard.md` を定期的に確認
+2. `queue/reports/` にファイルが揃ったら完了
+
+これにより、send-keysの信頼性問題を回避する。
 
 ## 禁止事項
 

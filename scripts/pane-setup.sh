@@ -47,11 +47,14 @@ for i in $(seq 1 "$WORKER_COUNT"); do
     tmux split-window -v -t "$SESSION:main.2" -c "$PROJECT_DIR" -b
 
     # フレンドリーファイア防止
-    sleep 3
+    sleep 2
 
     # WORKER_ID環境変数を設定して、--agent workerでClaudeを起動
+    # 重要: send-keysは2回分割で送信（shogunパターン）
     tmux send-keys -t "$SESSION:main.2" \
-        "export WORKER_ID=$i && claude --agent worker --dangerously-skip-permissions" Enter
+        "export WORKER_ID=$i && claude --agent worker --dangerously-skip-permissions"
+    sleep 1
+    tmux send-keys -t "$SESSION:main.2" Enter
 done
 
 # 全ワーカーのClaude起動完了を待つ（各ワーカー約10秒）
