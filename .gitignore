@@ -2,6 +2,10 @@
 queue/tasks/*.yaml
 queue/reports/*.yaml
 queue/ack/*.ack
+queue/conductor/*.yaml
+
+# Logs (transient)
+logs/
 
 # Python
 __pycache__/

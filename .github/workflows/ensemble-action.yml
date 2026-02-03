@@ -1,0 +1,288 @@
+name: Ensemble AI Orchestration
+
+on:
+  issue_comment:
+    types: [created]
+
+# Issueコメントで @ensemble run をトリガー
+# 使用例:
+#   @ensemble run              - defaultワークフローで実行
+#   @ensemble run simple       - simpleワークフロー（軽量・低コスト）
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  check-trigger:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+      workflow: ${{ steps.check.outputs.workflow }}
+      issue_number: ${{ github.event.issue.number }}
+    steps:
+      - name: Check for @ensemble trigger
+        id: check
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          # @ensemble run コマンドをチェック（環境変数経由で安全にアクセス）
+          if [[ "$COMMENT_BODY" =~ ^@ensemble[[:space:]]+run ]]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+
+            # ワークフロー選択: simple or default
+            if [[ "$COMMENT_BODY" =~ simple ]]; then
+              echo "workflow=simple" >> $GITHUB_OUTPUT
+              echo "Selected workflow: simple"
+            else
+              echo "workflow=default" >> $GITHUB_OUTPUT
+              echo "Selected workflow: default"
+            fi
+          else
+            echo "should_run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Add reaction to comment
+        if: steps.check.outputs.should_run == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: 'rocket'
+            });
+
+  execute:
+    needs: check-trigger
+    if: needs.check-trigger.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Issue情報を環境変数として安全に渡す
+      ISSUE_NUMBER: ${{ needs.check-trigger.outputs.issue_number }}
+      ISSUE_TITLE: ${{ github.event.issue.title }}
+      ISSUE_BODY: ${{ github.event.issue.body }}
+      SELECTED_WORKFLOW: ${{ needs.check-trigger.outputs.workflow }}
+      COMMENT_USER: ${{ github.event.comment.user.login }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Create branch for changes
+        id: branch
+        run: |
+          # Issue番号と日時からブランチ名を生成（安全な値のみ使用）
+          BRANCH_NAME="ensemble/issue-${ISSUE_NUMBER}-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH_NAME"
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+      - name: Post start comment
+        uses: actions/github-script@v7
+        env:
+          BRANCH_NAME: ${{ steps.branch.outputs.branch_name }}
+        with:
+          script: |
+            const workflow = process.env.SELECTED_WORKFLOW;
+            const branchName = process.env.BRANCH_NAME;
+            const issueNumber = parseInt(process.env.ISSUE_NUMBER, 10);
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: `## Ensemble Started\n\n- **Workflow**: \`${workflow}\`\n- **Branch**: \`${branchName}\`\n- **Started at**: ${new Date().toISOString()}\n\nProcessing issue...`
+            });
+
+      - name: Execute Claude Code
+        id: claude
+        run: |
+          # Issue内容をファイルに保存（環境変数経由で安全にアクセス）
+          cat > /tmp/issue-context.md << EOF
+          # Issue #${ISSUE_NUMBER}
+
+          ## Title
+          ${ISSUE_TITLE}
+
+          ## Description
+          ${ISSUE_BODY}
+
+          ## Workflow
+          ${SELECTED_WORKFLOW}
+          EOF
+
+          # Claude Codeを実行
+          # --print: 非インタラクティブモード
+          # --dangerously-skip-permissions: 自動承認（CI環境）
+          PROMPT="このIssueの内容を実装してください。ワークフローは${SELECTED_WORKFLOW}です。
+
+          $(cat /tmp/issue-context.md)"
+
+          claude --print --dangerously-skip-permissions "$PROMPT" \
+            2>&1 | tee /tmp/claude-output.log || true
+
+          # 出力を保存（PRの説明に使用）- 長さ制限
+          {
+            echo "output<<CLAUDE_OUTPUT_EOF"
+            head -c 8000 /tmp/claude-output.log
+            echo ""
+            echo "CLAUDE_OUTPUT_EOF"
+          } >> $GITHUB_OUTPUT
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            git add -A
+            git status --short
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No changes detected"
+          fi
+
+      - name: Commit changes
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          git config user.name "Ensemble Bot"
+          git config user.email "ensemble-bot@users.noreply.github.com"
+
+          # コミットメッセージは安全な値のみ使用
+          git commit -m "feat: implement issue #${ISSUE_NUMBER}
+
+          Automated implementation by Ensemble AI Orchestration.
+
+          Workflow: ${SELECTED_WORKFLOW}
+          Issue: #${ISSUE_NUMBER}"
+
+      - name: Push branch
+        if: steps.changes.outputs.has_changes == 'true'
+        env:
+          BRANCH_NAME: ${{ steps.branch.outputs.branch_name }}
+        run: |
+          git push -u origin "$BRANCH_NAME"
+
+      - name: Create Pull Request
+        if: steps.changes.outputs.has_changes == 'true'
+        id: pr
+        env:
+          BRANCH_NAME: ${{ steps.branch.outputs.branch_name }}
+          CLAUDE_OUTPUT: ${{ steps.claude.outputs.output }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueNumber = parseInt(process.env.ISSUE_NUMBER, 10);
+            const workflow = process.env.SELECTED_WORKFLOW;
+            const branchName = process.env.BRANCH_NAME;
+            const commentUser = process.env.COMMENT_USER;
+            const issueTitle = process.env.ISSUE_TITLE;
+            const claudeOutput = (process.env.CLAUDE_OUTPUT || '').substring(0, 5000);
+
+            const pr = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Ensemble] Issue #${issueNumber}`,
+              head: branchName,
+              base: 'main',
+              body: `## Summary
+
+            Automated implementation for #${issueNumber}.
+
+            ## Workflow
+
+            - **Type**: \`${workflow}\`
+            - **Triggered by**: @${commentUser}
+
+            ## Changes
+
+            See commits for details.
+
+            ## Claude Output (truncated)
+
+            \`\`\`
+            ${claudeOutput}
+            \`\`\`
+
+            ---
+
+            Closes #${issueNumber}
+
+            Generated with [Ensemble AI Orchestration](https://github.com/ChikaKakazu/ensemble)`
+            });
+
+            core.setOutput('pr_url', pr.data.html_url);
+            return pr.data.html_url;
+
+      - name: Post completion comment
+        if: always()
+        env:
+          HAS_CHANGES: ${{ steps.changes.outputs.has_changes }}
+          PR_URL: ${{ steps.pr.outputs.pr_url }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueNumber = parseInt(process.env.ISSUE_NUMBER, 10);
+            const workflow = process.env.SELECTED_WORKFLOW;
+            const hasChanges = process.env.HAS_CHANGES === 'true';
+            const prUrl = process.env.PR_URL || 'N/A';
+
+            let body;
+            if (hasChanges) {
+              body = `## Ensemble Completed
+
+            - **Status**: Success
+            - **PR**: ${prUrl}
+            - **Workflow**: \`${workflow}\`
+            - **Completed at**: ${new Date().toISOString()}
+
+            Please review the PR and merge if satisfied.`;
+            } else {
+              body = `## Ensemble Completed
+
+            - **Status**: No changes needed
+            - **Workflow**: \`${workflow}\`
+            - **Completed at**: ${new Date().toISOString()}
+
+            Claude analyzed the issue but no code changes were generated.`;
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: body
+            });
+
+      - name: Post error comment
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueNumber = parseInt(process.env.ISSUE_NUMBER, 10);
+            const workflow = process.env.SELECTED_WORKFLOW;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: `## Ensemble Failed
+
+            - **Status**: Error
+            - **Workflow**: \`${workflow}\`
+            - **Failed at**: ${new Date().toISOString()}
+
+            Please check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.`
+            });
