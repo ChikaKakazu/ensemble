@@ -1,12 +1,37 @@
 [project]
-name = "ensemble"
-version = "0.1.0"
-description = "AI Orchestration Tool for Claude Code"
+name = "ensemble-ai"
+version = "0.3.0"
+description = "AI Orchestration Tool for Claude Code - Multi-agent orchestration for complex development tasks"
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    { name = "Chika Kakazu", email = "chika@example.com" },
+]
+keywords = ["ai", "orchestration", "claude", "multi-agent", "automation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: Software Development :: Code Generators",
+]
 dependencies = [
     "pyyaml>=6.0",
+    "click>=8.0",
 ]
+
+[project.scripts]
+ensemble = "ensemble.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/ChikaKakazu/ensemble"
+Documentation = "https://github.com/ChikaKakazu/ensemble#readme"
+Repository = "https://github.com/ChikaKakazu/ensemble"
+Issues = "https://github.com/ChikaKakazu/ensemble/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -17,6 +42,27 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ensemble"]
+
+[tool.hatch.build.targets.wheel.sources]
+"src" = ""
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/README.md",
+    "/LICENSE",
+]
+
+# Include non-Python files in templates
+[tool.hatch.build.targets.wheel.force-include]
+"src/ensemble/templates/agents" = "ensemble/templates/agents"
+"src/ensemble/templates/commands" = "ensemble/templates/commands"
+"src/ensemble/templates/workflows" = "ensemble/templates/workflows"
+"src/ensemble/templates/scripts" = "ensemble/templates/scripts"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

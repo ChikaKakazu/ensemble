@@ -1,5 +1,5 @@
-"""Ensemble AI Orchestration - Utils version"""
+"""Ensemble AI Orchestration - Multi-agent orchestration for Claude Code."""
 
-__version__ = "0.2.0"
-__author__ = "Utils Team"
+__version__ = "0.3.0"
+__author__ = "Ensemble Team"
 

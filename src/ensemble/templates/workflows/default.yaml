@@ -1,0 +1,78 @@
+name: default
+description: |
+  標準ワークフロー。計画→実装→並列レビュー→改善の全サイクル。
+  通常の機能開発向け。
+max_iterations: 15
+cost_level: medium
+
+steps:
+  - name: plan
+    description: タスク分析と実行計画の策定
+    agent: conductor
+    mode: plan
+    thinking: false
+    outputs:
+      - plan.md
+      - task-breakdown.md
+    transitions:
+      - condition: plan_approved
+        next_step: execute
+      - condition: needs_clarification
+        next_step: PAUSE
+
+  - name: execute
+    description: |
+      計画に基づき実行。タスク規模に応じて
+      subagent/tmux並列/worktree分離を自動選択。
+    agent: conductor
+    mode: execute
+    allow_parallel: true
+    allow_worktree: true
+    transitions:
+      - condition: execution_complete
+        next_step: parallel_review
+      - condition: blocked
+        next_step: plan
+
+  - name: parallel_review
+    description: アーキテクチャとセキュリティを並列でレビュー
+    parallel:
+      - name: arch-review
+        agent: reviewer
+        rules:
+          - condition: approved
+          - condition: needs_fix
+        instruction_template: |
+          アーキテクチャと設計品質に集中してレビューしてください。
+          - コード構造
+          - 依存関係の方向
+          - 命名規則
+          - SOLID原則の遵守
+
+      - name: security-review
+        agent: security-reviewer
+        rules:
+          - condition: approved
+          - condition: needs_fix
+        instruction_template: |
+          セキュリティに集中してレビューしてください。
+          - インジェクション脆弱性
+          - 認証・認可
+          - データ保護
+          - OWASP Top 10
+
+    rules:
+      - condition: all("approved")
+        next_step: improve
+      - condition: any("needs_fix")
+        next_step: execute
+
+  - name: improve
+    description: 自己改善フェーズ
+    agent: learner
+    outputs:
+      - notes/{task-id}/lessons.md
+      - notes/{task-id}/skill-candidates.md
+    transitions:
+      - condition: done
+        next_step: COMPLETE

@@ -1,0 +1,149 @@
+name: heavy
+description: |
+  重量級ワークフロー。大規模リファクタ、セキュリティ重要タスク向け。
+  5段階レビュー（アーキ、セキュリティ、パフォーマンス、テスト、統合）。
+  修正ループあり、最大25イテレーション。
+max_iterations: 25
+cost_level: high
+
+steps:
+  - name: plan
+    description: 詳細計画の策定（リスク分析含む）
+    agent: conductor
+    mode: plan
+    thinking: false
+    outputs:
+      - plan.md
+      - task-breakdown.md
+      - risk-analysis.md
+    transitions:
+      - condition: plan_approved
+        next_step: design_review
+      - condition: needs_clarification
+        next_step: PAUSE
+
+  - name: design_review
+    description: 実装前のアーキテクチャ設計レビュー
+    agent: reviewer
+    instruction_template: |
+      実装前のアーキテクチャ設計をレビューしてください。
+      - 全体構造の妥当性
+      - スケーラビリティ
+      - 依存関係の健全性
+      - 既存コードとの整合性
+    transitions:
+      - condition: approved
+        next_step: execute
+      - condition: needs_fix
+        next_step: plan
+
+  - name: execute
+    description: |
+      計画に基づき実行。大規模タスクのため
+      worktree分離を優先的に選択。
+    agent: conductor
+    mode: execute
+    allow_parallel: true
+    allow_worktree: true
+    prefer_worktree: true
+    transitions:
+      - condition: execution_complete
+        next_step: parallel_review
+      - condition: blocked
+        next_step: plan
+
+  - name: parallel_review
+    description: 5段階並列レビュー
+    parallel:
+      - name: arch-review
+        agent: reviewer
+        rules:
+          - condition: approved
+          - condition: needs_fix
+        instruction_template: |
+          アーキテクチャと設計品質を厳密にレビューしてください。
+          - コード構造と責務分離
+          - 依存関係の方向（クリーンアーキテクチャ準拠）
+          - SOLID原則の遵守
+          - 抽象化レベルの適切性
+
+      - name: security-review
+        agent: security-reviewer
+        rules:
+          - condition: approved
+          - condition: needs_fix
+        instruction_template: |
+          セキュリティを厳密にレビューしてください。
+          - OWASP Top 10（全項目チェック）
+          - 認証・認可の実装
+          - データ保護（暗号化、サニタイズ）
+          - シークレット管理
+          - 依存ライブラリの脆弱性
+
+      - name: perf-review
+        agent: reviewer
+        rules:
+          - condition: approved
+          - condition: needs_fix
+        instruction_template: |
+          パフォーマンス観点でレビューしてください。
+          - アルゴリズムの計算量
+          - メモリ使用量
+          - N+1クエリ問題
+          - キャッシュ戦略
+          - 非同期処理の適切性
+
+      - name: test-review
+        agent: reviewer
+        rules:
+          - condition: approved
+          - condition: needs_fix
+        instruction_template: |
+          テスト品質をレビューしてください。
+          - カバレッジ（80%以上必須）
+          - エッジケースの網羅
+          - テストの独立性
+          - モックの適切性
+          - 統合テストの存在
+
+      - name: integration-review
+        agent: integrator
+        rules:
+          - condition: approved
+          - condition: needs_fix
+        instruction_template: |
+          統合観点でレビューしてください。
+          - 既存機能への影響
+          - 後方互換性
+          - マイグレーション要件
+          - デプロイ手順
+
+    rules:
+      - condition: all("approved")
+        next_step: final_check
+      - condition: any("needs_fix")
+        next_step: execute
+
+  - name: final_check
+    description: 最終確認（Conductorによる総合判断）
+    agent: conductor
+    instruction_template: |
+      全レビューが承認されました。最終確認を行ってください。
+      - 全ての要件が満たされているか
+      - 残課題はないか
+      - リリースノートの内容
+    transitions:
+      - condition: approved
+        next_step: improve
+      - condition: needs_fix
+        next_step: execute
+
+  - name: improve
+    description: 自己改善フェーズ
+    agent: learner
+    outputs:
+      - notes/{task-id}/lessons.md
+      - notes/{task-id}/skill-candidates.md
+    transitions:
+      - condition: done
+        next_step: COMPLETE
