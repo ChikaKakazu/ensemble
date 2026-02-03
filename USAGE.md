@@ -11,16 +11,16 @@ EnsembleはClaude Codeを活用したAIオーケストレーションツール�
 
 ```bash
 # グローバルにインストール
-uv tool install ensemble-ai
+uv tool install ensemble-claude
 
 # またはプロジェクトに追加
-uv add ensemble-ai
+uv add ensemble-claude
 ```
 
 ### pipを使用
 
 ```bash
-pip install ensemble-ai
+pip install ensemble-claude
 ```
 
 ### ソースからインストール

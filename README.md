@@ -28,16 +28,16 @@ Ensemble is an AI orchestration system that combines the best practices from:
 
 ```bash
 # Install globally
-uv tool install ensemble-ai
+uv tool install ensemble-claude
 
 # Or add to your project
-uv add ensemble-ai
+uv add ensemble-claude
 ```
 
 ### Using pip
 
 ```bash
-pip install ensemble-ai
+pip install ensemble-claude
 ```
 
 ### From source
