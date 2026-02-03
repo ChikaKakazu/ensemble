@@ -7,8 +7,15 @@ task_id: task-001
 # ステータス: success, failed, blocked
 status: success
 
-# ワーカーID
+# 割り当てられたワーカーID
 worker_id: 1
+
+# 実際に実行したワーカーID（代理実行時は異なる）
+# 通常は worker_id と同じ値。代理実行時のみ異なる値を設定。
+executed_by: 1
+
+# 代理実行の場合、元の担当者ID（通常はnull）
+delegated_from: null
 
 # 実行内容の要約
 summary: "実行した内容の要約を記載"
@@ -20,6 +27,15 @@ files_modified:
 
 # エラー（あれば）
 errors: []
+
+# 失敗時の理由（status: failed の場合に記載）
+# failure_reason: "具体的な理由"
+
+# 失敗時に検討した代替案（status: failed の場合に記載）
+# options_considered: |
+#   検討した代替案1: ...
+#   検討した代替案2: ...
+#   結論: なぜ failed を選んだか
 
 # 完了時刻
 completed_at: "2026-02-03T10:30:00Z"
