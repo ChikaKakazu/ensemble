@@ -29,7 +29,6 @@ fi
 
 # キューのクリーンアップ（新しいセッションはクリーンスタート）
 echo "Cleaning up queue..."
-rm -f "$QUEUE_DIR/conductor/"*.yaml 2>/dev/null || true
 rm -f "$QUEUE_DIR/tasks/"*.yaml 2>/dev/null || true
 rm -f "$QUEUE_DIR/processing/"*.yaml 2>/dev/null || true
 rm -f "$QUEUE_DIR/reports/"*.yaml 2>/dev/null || true
