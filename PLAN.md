@@ -611,7 +611,7 @@ tmux attach-session -t ensemble
 
 ### Phase 5 完了条件
 - [x] `/improve` でlearnerが学習分析を実行 ✅ (2026-02-03)
-- [x] `notes/{task-id}/` に学習記録が保存 ✅ (notes/crud-api-demo/)
+- [x] `notes/{task-id}/` に学習記録が保存 ✅
 - [x] CLAUDE.md更新提案が生成される ✅
 - [ ] `/go-light` でsimple.yamlが選択される (手動検証待ち)
 
