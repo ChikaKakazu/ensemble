@@ -38,14 +38,17 @@ errors:
 
 ## send-keysプロトコル
 
-Dispatchへの報告時は**2回分割**で送信:
+**ペイン番号（main.0, main.1等）は使用禁止**。ユーザーのtmux設定によって番号が変わるため。
+
+Dispatchへの報告時は**2回分割 + ペインID**で送信:
 ```bash
-# ❌ 禁止パターン
+# ❌ 禁止パターン（ペイン番号を使用）
 tmux send-keys -t ensemble:main.1 "タスク${TASK_ID}完了" Enter
 
-# ✅ 正規プロトコル
-tmux send-keys -t ensemble:main.1 'タスク${TASK_ID}完了'
-tmux send-keys -t ensemble:main.1 Enter
+# ✅ 正規プロトコル（ペインIDを使用）
+source .ensemble/panes.env
+tmux send-keys -t "$DISPATCH_PANE" 'タスク${TASK_ID}完了'
+tmux send-keys -t "$DISPATCH_PANE" Enter
 ```
 
 ---
@@ -81,9 +84,10 @@ tmux send-keys -t ensemble:main.1 Enter
 4. タスクを実行
 5. 完了報告を作成:
    queue/reports/${TASK_ID}.yaml
-6. Dispatchに完了を通知（2回分割）:
-   tmux send-keys -t ensemble:main.1 'タスク${TASK_ID}完了'
-   tmux send-keys -t ensemble:main.1 Enter
+6. Dispatchに完了を通知（2回分割 + ペインID）:
+   source .ensemble/panes.env
+   tmux send-keys -t "$DISPATCH_PANE" 'タスク${TASK_ID}完了'
+   tmux send-keys -t "$DISPATCH_PANE" Enter
 ```
 
 ## タスクYAMLフォーマット
@@ -177,3 +181,4 @@ completed_at: "2026-02-03T10:30:00Z"
 - ポーリングで待機する（イベント駆動で待機せよ）
 - 勝手に代替手段で「完了」にしない（正直に failed 報告）
 - 他人の名前で報告を提出しない（executed_by で正直に記録）
+- **ペイン番号（main.0, main.1等）を使用する（ペインIDを使え）**

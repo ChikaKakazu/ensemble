@@ -76,9 +76,10 @@ Dispatchに指示を送り、ワーカーペインを起動させる。
    workflow: default
    pattern: B
 
-3. Dispatchに通知（2回分割）:
-   tmux send-keys -t ensemble:main.1 '新しい指示があります。queue/conductor/dispatch-instruction.yaml を確認してください'
-   tmux send-keys -t ensemble:main.1 Enter
+3. Dispatchに通知（2回分割 + ペインID）:
+   source .ensemble/panes.env
+   tmux send-keys -t "$DISPATCH_PANE" '新しい指示があります。queue/conductor/dispatch-instruction.yaml を確認してください'
+   tmux send-keys -t "$DISPATCH_PANE" Enter
 
 4. 完了を待つ（Dispatchからのsend-keysは来ない。status/dashboard.mdを確認）
 ```
@@ -235,3 +236,4 @@ Dispatchはsend-keysでConductorに報告しない。以下の方法で完了を
 - ポーリングで完了を待つ（イベント駆動で待機せよ）
 - ワーカーの作業を横取りする
 - 曖昧な表現で報告する（具体的な数値を使え）
+- **ペイン番号（main.0, main.1等）を使用する（ペインIDを使え）**
