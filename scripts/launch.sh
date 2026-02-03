@@ -58,10 +58,12 @@ tmux split-window -v -t "$SESSION:main.0" -c "$PROJECT_DIR" -l 50%
 # pane 1: dispatch (左下)
 # pane 2: dashboard (右、フル高さ)
 
-# 4. 各ペインでコマンド起動
+# 4. 各ペインでコマンド起動（2回分割方式）
 # pane 0: conductor (--agent でエージェント定義をロード)
 tmux send-keys -t "$SESSION:main.0" \
-    "MAX_THINKING_TOKENS=0 claude --agent conductor --model opus --dangerously-skip-permissions" C-m
+    "MAX_THINKING_TOKENS=0 claude --agent conductor --model opus --dangerously-skip-permissions"
+sleep 1
+tmux send-keys -t "$SESSION:main.0" Enter
 
 # フレンドリーファイア防止
 sleep 3
@@ -69,7 +71,9 @@ sleep 3
 # pane 1: dispatch (--agent でエージェント定義をロード)
 echo "Starting Dispatch (Sonnet)..."
 tmux send-keys -t "$SESSION:main.1" \
-    "claude --agent dispatch --model sonnet --dangerously-skip-permissions" C-m
+    "claude --agent dispatch --model sonnet --dangerously-skip-permissions"
+sleep 1
+tmux send-keys -t "$SESSION:main.1" Enter
 
 # フレンドリーファイア防止
 sleep 3
@@ -77,7 +81,9 @@ sleep 3
 # pane 2: dashboard
 echo "Starting Dashboard monitor..."
 tmux send-keys -t "$SESSION:main.2" \
-    "watch -n 5 cat status/dashboard.md" C-m
+    "watch -n 5 cat status/dashboard.md"
+sleep 1
+tmux send-keys -t "$SESSION:main.2" Enter
 
 # 5. 左上ペイン（conductor）にフォーカス
 tmux select-pane -t "$SESSION:main.0"
