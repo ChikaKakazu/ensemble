@@ -1,26 +1,24 @@
 #!/bin/bash
 # scripts/pane-setup.sh
-# ワーカーペインを既存のmainウィンドウに追加する（右側縦並び）
+# ワーカーペインをworkersウィンドウの右側に追加する
 # フレンドリーファイア防止のため3秒間隔で起動
 #
 # 注意: ペインIDを使用することで、ユーザーのtmux設定（pane-base-index等）に
 #       依存せずに動作する
 #
-# 初期レイアウト:
+# 初期レイアウト (launch.sh後):
+# Window: workers
 # +------------------+----------+
-# |    conductor     |          |
-# |                  | dashboard|
-# +------------------+          |
-# |    dispatch      |          |
+# |    dispatch      | (empty)  |
+# +------------------+----------+
+# |    dashboard     |          |
 # +------------------+----------+
 #
 # ワーカー追加後:
 # +------------------+----------+
-# |    conductor     | worker-1 |
-# |                  +----------+
-# +------------------+ worker-2 |
-# |    dispatch      +----------+
-# |                  | dashboard|
+# |    dispatch      | worker-1 |
+# +------------------+----------+
+# |    dashboard     | worker-2 |
 # +------------------+----------+
 
 set -euo pipefail
@@ -44,35 +42,53 @@ else
     exit 1
 fi
 
-echo "Adding $WORKER_COUNT worker panes..."
-echo "  Using dashboard pane: $DASHBOARD_PANE"
+echo "Adding $WORKER_COUNT worker panes to workers window..."
 
-# mainウィンドウを選択
-tmux select-window -t "$SESSION:main"
+# workersウィンドウを選択
+tmux select-window -t "$SESSION:workers"
 
 # ワーカーペインIDを格納する配列
 declare -a WORKER_PANES=()
 
 # 現在のペインID一覧を取得（後で新しいペインを特定するため）
 get_all_pane_ids() {
-    tmux list-panes -t "$SESSION:main" -F '#{pane_id}'
+    tmux list-panes -t "$SESSION:workers" -F '#{pane_id}'
 }
+
+# 最初のワーカーはWORKER_AREA_PANEを使用（プレースホルダーを置き換え）
+if [ -n "${WORKER_AREA_PANE:-}" ]; then
+    FIRST_WORKER_PANE="$WORKER_AREA_PANE"
+else
+    # WORKER_AREA_PANEがない場合は、右側のペインを探す
+    # dispatch, dashboardでないペイン
+    FIRST_WORKER_PANE=$(tmux list-panes -t "$SESSION:workers" -F '#{pane_id}' | \
+        grep -v "$DISPATCH_PANE" | grep -v "$DASHBOARD_PANE" | head -1)
+fi
+
+echo "  First worker will use pane: $FIRST_WORKER_PANE"
 
 for i in $(seq 1 "$WORKER_COUNT"); do
     echo "Starting worker-$i..."
 
-    # 分割前のペインID一覧
-    BEFORE_PANES=$(get_all_pane_ids)
+    if [ "$i" -eq 1 ]; then
+        # 最初のワーカーはプレースホルダーペインを使用
+        NEW_PANE="$FIRST_WORKER_PANE"
+    else
+        # 2番目以降は右側のペインを分割
+        # 分割前のペインID一覧
+        BEFORE_PANES=$(get_all_pane_ids)
 
-    # dashboardペインを上に分割してワーカーを追加
-    tmux split-window -v -t "$DASHBOARD_PANE" -c "$PROJECT_DIR" -b
+        # 前のワーカーペインを下に分割
+        PREV_PANE="${WORKER_PANES[$((i - 2))]}"
+        tmux split-window -v -t "$PREV_PANE" -c "$PROJECT_DIR"
 
-    # フレンドリーファイア防止
-    sleep 2
+        # フレンドリーファイア防止
+        sleep 2
 
-    # 分割後のペインID一覧から新しいペインを特定
-    AFTER_PANES=$(get_all_pane_ids)
-    NEW_PANE=$(comm -13 <(echo "$BEFORE_PANES" | sort) <(echo "$AFTER_PANES" | sort))
+        # 分割後のペインID一覧から新しいペインを特定
+        AFTER_PANES=$(get_all_pane_ids)
+        NEW_PANE=$(comm -13 <(echo "$BEFORE_PANES" | sort) <(echo "$AFTER_PANES" | sort))
+    fi
 
     echo "  Worker-$i pane: $NEW_PANE"
     WORKER_PANES+=("$NEW_PANE")
@@ -83,18 +99,29 @@ for i in $(seq 1 "$WORKER_COUNT"); do
         "export WORKER_ID=$i && claude --agent worker --dangerously-skip-permissions"
     sleep 1
     tmux send-keys -t "$NEW_PANE" Enter
+
+    # フレンドリーファイア防止（最初以外）
+    if [ "$i" -lt "$WORKER_COUNT" ]; then
+        sleep 3
+    fi
 done
 
 # 全ワーカーのClaude起動完了を待つ（各ワーカー約10秒）
 echo "Waiting for all workers to initialize..."
 sleep $((WORKER_COUNT * 10))
 
-# Conductorペインにフォーカスを戻す
+# Conductorウィンドウに戻り、フォーカス
+tmux select-window -t "$SESSION:conductor"
 tmux select-pane -t "$CONDUCTOR_PANE"
 
 # panes.env を更新（ワーカーペインIDを追加）
 {
     echo "# Ensemble pane IDs (auto-generated)"
+    echo "# Window names"
+    echo "CONDUCTOR_WINDOW=conductor"
+    echo "WORKERS_WINDOW=workers"
+    echo ""
+    echo "# Pane IDs"
     echo "CONDUCTOR_PANE=$CONDUCTOR_PANE"
     echo "DISPATCH_PANE=$DISPATCH_PANE"
     echo "DASHBOARD_PANE=$DASHBOARD_PANE"
@@ -107,5 +134,15 @@ tmux select-pane -t "$CONDUCTOR_PANE"
 echo ""
 echo "Worker panes added: $WORKER_COUNT workers (ready for tasks)"
 echo ""
-echo "Current panes:"
-tmux list-panes -t "$SESSION:main" -F "  #{pane_id}: #{pane_width}x#{pane_height}"
+echo "Layout (workers window):"
+echo "  +------------------+----------+"
+echo "  |    dispatch      | worker-1 |"
+echo "  +------------------+----------+"
+echo "  |    dashboard     | worker-2 |"
+echo "  +------------------+----------+"
+echo ""
+echo "Current panes in workers window:"
+tmux list-panes -t "$SESSION:workers" -F "  #{pane_id}: #{pane_width}x#{pane_height}"
+echo ""
+echo "Switch to workers window: Ctrl+B, 1"
+echo ""

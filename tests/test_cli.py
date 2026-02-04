@@ -140,6 +140,11 @@ class TestLaunchCommand:
         # This test may pass (exit 0) if tmux is not installed
         # or may fail with "not initialized" if tmux is available
         result = runner.invoke(cli, ["launch", "--no-attach"])
-        # Either not initialized error, or tmux not found, or session exists
+        # Either not initialized error, or tmux/claude not found, or session exists
         if result.exit_code != 0:
-            assert "not initialized" in result.output.lower() or "tmux" in result.output.lower()
+            output_lower = result.output.lower()
+            assert (
+                "not initialized" in output_lower
+                or "tmux" in output_lower
+                or "claude" in output_lower
+            )

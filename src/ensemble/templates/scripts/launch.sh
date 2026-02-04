@@ -1,7 +1,7 @@
 #!/bin/bash
 # scripts/launch.sh
 # Ensembleのメインtmuxセッションを起動する
-# 構成: 左=conductor、右=その他（tiled）
+# 構成: 2ウィンドウ（conductor独立 + workers）
 #
 # 注意: ペインIDを使用することで、ユーザーのtmux設定（pane-base-index等）に
 #       依存せずに動作する
@@ -38,43 +38,57 @@ rm -f "$QUEUE_DIR/ack/"*.ack 2>/dev/null || true
 echo "$(date -Iseconds) Session started, queue cleaned" >> "$LOG_DIR/ensemble-$(date +%Y%m%d).log"
 
 # === レイアウト ===
+# ウィンドウ1: conductor（フルスクリーン）
+# +----------------------------------+
+# |                                  |
+# |           Conductor              |
+# |                                  |
+# +----------------------------------+
+#
+# ウィンドウ2: workers
 # +------------------+----------+
-# |    conductor     |          |
-# |                  | dashboard|
-# +------------------+          |
-# |    dispatch      |          |
+# |    dispatch      | (worker) |
 # +------------------+----------+
-# ワーカー追加時はdashboard列に縦に追加される
+# |    dashboard     | (worker) |
+# +------------------+----------+
 
-# 1. セッション作成（全体）
-echo "Creating session..."
-tmux new-session -d -s "$SESSION" -n "main" -c "$PROJECT_DIR"
+# 1. セッション作成（conductorウィンドウ）
+echo "Creating session with conductor window..."
+tmux new-session -d -s "$SESSION" -n "conductor" -c "$PROJECT_DIR"
 
-# 最初のペインのIDを取得（これがconductorになる）
-CONDUCTOR_PANE=$(tmux list-panes -t "$SESSION:main" -F '#{pane_id}')
+# conductorペインのIDを取得
+CONDUCTOR_PANE=$(tmux list-panes -t "$SESSION:conductor" -F '#{pane_id}')
 echo "  Conductor pane: $CONDUCTOR_PANE"
 
-# 2. 左右に分割（左65% : 右35%）
-tmux split-window -h -t "$CONDUCTOR_PANE" -c "$PROJECT_DIR" -l 35%
+# 2. workersウィンドウを追加
+echo "Creating workers window..."
+tmux new-window -t "$SESSION" -n "workers" -c "$PROJECT_DIR"
 
-# 新しく作成されたペインのIDを取得（これがdashboardになる）
-DASHBOARD_PANE=$(tmux list-panes -t "$SESSION:main" -F '#{pane_id}' | grep -v "$CONDUCTOR_PANE")
-echo "  Dashboard pane: $DASHBOARD_PANE"
-
-# 3. 左ペイン（conductor）を上下に分割（conductor / dispatch）
-tmux split-window -v -t "$CONDUCTOR_PANE" -c "$PROJECT_DIR" -l 50%
-
-# 新しく作成されたペインのIDを取得（これがdispatchになる）
-# conductorとdashboard以外のペインがdispatch
-DISPATCH_PANE=$(tmux list-panes -t "$SESSION:main" -F '#{pane_id}' | grep -v "$CONDUCTOR_PANE" | grep -v "$DASHBOARD_PANE")
+# 最初のペインのIDを取得（これがdispatchになる）
+DISPATCH_PANE=$(tmux list-panes -t "$SESSION:workers" -F '#{pane_id}')
 echo "  Dispatch pane: $DISPATCH_PANE"
 
-# 現在の状態:
-# CONDUCTOR_PANE: conductor (左上)
-# DISPATCH_PANE: dispatch (左下)
-# DASHBOARD_PANE: dashboard (右、フル高さ)
+# 3. 左右に分割（左60% : 右40%）- 右側はワーカー用
+tmux split-window -h -t "$DISPATCH_PANE" -c "$PROJECT_DIR" -l 40%
 
-# 4. 各ペインでコマンド起動（2回分割方式）
+# 右側のペインIDを取得（ワーカー用プレースホルダー）
+RIGHT_PANE=$(tmux list-panes -t "$SESSION:workers" -F '#{pane_id}' | grep -v "$DISPATCH_PANE")
+echo "  Right pane (for workers): $RIGHT_PANE"
+
+# 4. 左ペイン（dispatch）を上下に分割（dispatch / dashboard）
+tmux split-window -v -t "$DISPATCH_PANE" -c "$PROJECT_DIR" -l 50%
+
+# dashboardペインIDを取得（dispatchとright以外）
+DASHBOARD_PANE=$(tmux list-panes -t "$SESSION:workers" -F '#{pane_id}' | grep -v "$DISPATCH_PANE" | grep -v "$RIGHT_PANE")
+echo "  Dashboard pane: $DASHBOARD_PANE"
+
+# 現在の状態:
+# DISPATCH_PANE: dispatch (左上)
+# DASHBOARD_PANE: dashboard (左下)
+# RIGHT_PANE: ワーカー用プレースホルダー (右)
+
+# 5. 各ペインでコマンド起動
+
 # conductor (--agent でエージェント定義をロード)
 echo "Starting Conductor (Opus, no thinking)..."
 tmux send-keys -t "$CONDUCTOR_PANE" \
@@ -102,16 +116,29 @@ tmux send-keys -t "$DASHBOARD_PANE" \
 sleep 1
 tmux send-keys -t "$DASHBOARD_PANE" Enter
 
-# 5. conductorペインにフォーカス
+# 右側のプレースホルダーにメッセージ表示
+tmux send-keys -t "$RIGHT_PANE" \
+    "echo '=== Worker Area ===' && echo 'Run: ./scripts/pane-setup.sh [count]' && echo 'to add workers here.'"
+sleep 1
+tmux send-keys -t "$RIGHT_PANE" Enter
+
+# 6. conductorウィンドウに戻り、conductorペインにフォーカス
+tmux select-window -t "$SESSION:conductor"
 tmux select-pane -t "$CONDUCTOR_PANE"
 
 # ペインIDをファイルに保存（他のスクリプトから参照可能に）
 mkdir -p "$PROJECT_DIR/.ensemble"
 cat > "$PROJECT_DIR/.ensemble/panes.env" << EOF
 # Ensemble pane IDs (auto-generated)
+# Window names
+CONDUCTOR_WINDOW=conductor
+WORKERS_WINDOW=workers
+
+# Pane IDs
 CONDUCTOR_PANE=$CONDUCTOR_PANE
 DISPATCH_PANE=$DISPATCH_PANE
 DASHBOARD_PANE=$DASHBOARD_PANE
+WORKER_AREA_PANE=$RIGHT_PANE
 EOF
 
 echo ""
@@ -119,18 +146,30 @@ echo "=========================================="
 echo "  Ensemble launched successfully!"
 echo "=========================================="
 echo ""
-echo "Layout:"
+echo "Window 1: conductor (user interaction)"
+echo "  +----------------------------------+"
+echo "  |           Conductor              |"
+echo "  |         (claude CLI)             |"
+echo "  +----------------------------------+"
+echo ""
+echo "Window 2: workers (execution)"
 echo "  +------------------+----------+"
-echo "  |    conductor     |          |"
-echo "  |                  | dashboard|"
-echo "  +------------------+          |"
-echo "  |    dispatch      |          |"
+echo "  |    dispatch      | (worker) |"
+echo "  +------------------+----------+"
+echo "  |    dashboard     | (worker) |"
 echo "  +------------------+----------+"
 echo ""
 echo "Panes:"
-echo "  - $CONDUCTOR_PANE (left-top)   : Conductor (Opus, no thinking)"
-echo "  - $DISPATCH_PANE (left-bottom): Dispatch (Sonnet)"
-echo "  - $DASHBOARD_PANE (right)      : Dashboard monitor"
+echo "  - $CONDUCTOR_PANE : Conductor (Opus, no thinking)"
+echo "  - $DISPATCH_PANE  : Dispatch (Sonnet)"
+echo "  - $DASHBOARD_PANE : Dashboard monitor"
+echo "  - $RIGHT_PANE     : Worker area (placeholder)"
+echo ""
+echo "Window switching:"
+echo "  Ctrl+B, n    : Next window"
+echo "  Ctrl+B, p    : Previous window"
+echo "  Ctrl+B, 0    : conductor window"
+echo "  Ctrl+B, 1    : workers window"
 echo ""
 echo "Add workers: ./scripts/pane-setup.sh [count]"
 echo "To attach:   tmux attach-session -t $SESSION"
