@@ -245,24 +245,23 @@ done
 Ensembleは2つの独立したtmuxセッションで動作する:
 
 ```
-セッション1: ensemble-conductor（あなたがいる場所）
-+----------------------------------+
-|           Conductor              |
-|         (claude CLI)             |
-+----------------------------------+
+セッション1: ensemble-conductor
++------------------+------------------+
+|   Conductor      |   dashboard      |
++------------------+------------------+
 
-セッション2: ensemble-workers（Dispatch/Worker/Dashboard）
+セッション2: ensemble-workers
 +------------------+----------+
-|    dispatch      | worker-1 |
-+------------------+----------+
-|    dashboard     | worker-2 |
+|                  | worker-1 |
+|   dispatch       +----------+
+|                  | worker-2 |
 +------------------+----------+
 ```
 
 ### 2つのターミナルで同時表示
 
 別々のターミナルウィンドウで各セッションをアタッチすることで、
-ConductorとWorkers両方を同時に監視できる:
+Conductor（+dashboard）とWorkers（dispatch+workers）両方を同時に監視できる:
 
 ```bash
 # ターミナル1

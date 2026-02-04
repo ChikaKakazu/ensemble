@@ -92,17 +92,14 @@ def run_launch(session: str = "ensemble", attach: bool = True) -> None:
     click.echo("==========================================")
     click.echo("")
     click.echo(f"Session 1: {conductor_session}")
-    click.echo("  +----------------------------------+")
-    click.echo("  |           Conductor              |")
-    click.echo("  |         (claude CLI)             |")
-    click.echo("  +----------------------------------+")
+    click.echo("  +------------------+------------------+")
+    click.echo("  |   Conductor      |   dashboard      |")
+    click.echo("  +------------------+------------------+")
     click.echo("")
     click.echo(f"Session 2: {workers_session}")
-    click.echo("  +------------------+----------+")
-    click.echo("  |    dispatch      | (worker) |")
-    click.echo("  +------------------+----------+")
-    click.echo("  |    dashboard     | (worker) |")
-    click.echo("  +------------------+----------+")
+    click.echo("  +------------------+------------------+")
+    click.echo("  |   dispatch       |   worker-area    |")
+    click.echo("  +------------------+------------------+")
     click.echo("")
     click.echo("To view both simultaneously, open two terminal windows:")
     click.echo(f"  Terminal 1: tmux attach -t {conductor_session}")
@@ -181,8 +178,8 @@ def _resolve_agent_paths(project_root: Path) -> dict[str, Path]:
 def _create_sessions(session: str, project_root: Path, agents: dict[str, Path]) -> None:
     """Create two separate tmux sessions for Ensemble.
 
-    Session 1 ({session}-conductor): Conductor only
-    Session 2 ({session}-workers): Dispatch, Dashboard, Worker area
+    Session 1 ({session}-conductor): Conductor (left 60%) + Dashboard (right 40%)
+    Session 2 ({session}-workers): Dispatch (left 60%) + Worker area (right 40%)
 
     This allows viewing both sessions simultaneously in separate terminal windows.
     """
@@ -201,19 +198,41 @@ def _create_sessions(session: str, project_root: Path, agents: dict[str, Path]) 
         check=True,
     )
 
-    # Start Claude in Conductor pane
+    # Split conductor window: left/right (60/40)
+    subprocess.run(
+        ["tmux", "split-window", "-t", f"{conductor_session}:main", "-h", "-l", "40%", "-c", str(project_root)],
+        check=True,
+    )
+
+    # Set pane titles
+    subprocess.run(["tmux", "select-pane", "-t", f"{conductor_session}:main.0", "-T", "conductor"], check=True)
+    subprocess.run(["tmux", "select-pane", "-t", f"{conductor_session}:main.1", "-T", "dashboard"], check=True)
+
+    # Start Claude in Conductor pane (left)
     conductor_agent = agents.get("conductor")
     if conductor_agent:
         cmd = f"MAX_THINKING_TOKENS=0 claude --agent {conductor_agent} --model opus --dangerously-skip-permissions"
     else:
         cmd = "MAX_THINKING_TOKENS=0 claude --model opus --dangerously-skip-permissions"
     subprocess.run(
-        ["tmux", "send-keys", "-t", f"{conductor_session}:main", cmd],
+        ["tmux", "send-keys", "-t", f"{conductor_session}:main.0", cmd],
         check=True,
     )
     time.sleep(1)
     subprocess.run(
-        ["tmux", "send-keys", "-t", f"{conductor_session}:main", "Enter"],
+        ["tmux", "send-keys", "-t", f"{conductor_session}:main.0", "Enter"],
+        check=True,
+    )
+
+    # Start dashboard watch in Dashboard pane (right)
+    dashboard_path = project_root / ".ensemble" / "status" / "dashboard.md"
+    subprocess.run(
+        ["tmux", "send-keys", "-t", f"{conductor_session}:main.1", f"watch -n 5 cat {dashboard_path}"],
+        check=True,
+    )
+    time.sleep(1)
+    subprocess.run(
+        ["tmux", "send-keys", "-t", f"{conductor_session}:main.1", "Enter"],
         check=True,
     )
 
@@ -238,18 +257,11 @@ def _create_sessions(session: str, project_root: Path, agents: dict[str, Path]) 
         check=True,
     )
 
-    # Split left pane vertically (dispatch/dashboard)
-    subprocess.run(
-        ["tmux", "split-window", "-t", f"{workers_session}:main.0", "-v", "-l", "50%", "-c", str(project_root)],
-        check=True,
-    )
-
     # Set pane titles
     subprocess.run(["tmux", "select-pane", "-t", f"{workers_session}:main.0", "-T", "dispatch"], check=True)
-    subprocess.run(["tmux", "select-pane", "-t", f"{workers_session}:main.1", "-T", "dashboard"], check=True)
-    subprocess.run(["tmux", "select-pane", "-t", f"{workers_session}:main.2", "-T", "worker-area"], check=True)
+    subprocess.run(["tmux", "select-pane", "-t", f"{workers_session}:main.1", "-T", "worker-area"], check=True)
 
-    # Start Claude in Dispatch pane (pane 0 - left top)
+    # Start Claude in Dispatch pane (left)
     dispatch_agent = agents.get("dispatch")
     if dispatch_agent:
         cmd = f"claude --agent {dispatch_agent} --model sonnet --dangerously-skip-permissions"
@@ -265,21 +277,9 @@ def _create_sessions(session: str, project_root: Path, agents: dict[str, Path]) 
         check=True,
     )
 
-    # Start dashboard watch in Dashboard pane (pane 1 - left bottom)
-    dashboard_path = project_root / ".ensemble" / "status" / "dashboard.md"
+    # Show placeholder message in worker area (right)
     subprocess.run(
-        ["tmux", "send-keys", "-t", f"{workers_session}:main.1", f"watch -n 5 cat {dashboard_path}"],
-        check=True,
-    )
-    time.sleep(1)
-    subprocess.run(
-        ["tmux", "send-keys", "-t", f"{workers_session}:main.1", "Enter"],
-        check=True,
-    )
-
-    # Show placeholder message in worker area (pane 2 - right)
-    subprocess.run(
-        ["tmux", "send-keys", "-t", f"{workers_session}:main.2", "echo '=== Worker Area ===' && echo 'Workers will be started here.'", "Enter"],
+        ["tmux", "send-keys", "-t", f"{workers_session}:main.1", "echo '=== Worker Area ===' && echo 'Workers will be started here.'", "Enter"],
         check=True,
     )
 
@@ -292,16 +292,21 @@ def _save_pane_ids(session: str, ensemble_dir: Path) -> None:
     conductor_session = f"{session}-conductor"
     workers_session = f"{session}-workers"
 
-    # Get conductor pane ID
+    # Get conductor session pane IDs
     result = subprocess.run(
-        ["tmux", "list-panes", "-t", f"{conductor_session}:main", "-F", "#{pane_id}"],
+        ["tmux", "list-panes", "-t", f"{conductor_session}:main", "-F", "#{pane_index}:#{pane_id}"],
         capture_output=True,
         text=True,
         check=True,
     )
-    conductor_pane = result.stdout.strip()
 
-    # Get workers pane IDs
+    conductor_pane_map = {}
+    for line in result.stdout.strip().split("\n"):
+        if ":" in line:
+            idx, pane_id = line.split(":", 1)
+            conductor_pane_map[int(idx)] = pane_id
+
+    # Get workers session pane IDs
     result = subprocess.run(
         ["tmux", "list-panes", "-t", f"{workers_session}:main", "-F", "#{pane_index}:#{pane_id}"],
         capture_output=True,
@@ -309,11 +314,11 @@ def _save_pane_ids(session: str, ensemble_dir: Path) -> None:
         check=True,
     )
 
-    pane_map = {}
+    workers_pane_map = {}
     for line in result.stdout.strip().split("\n"):
         if ":" in line:
             idx, pane_id = line.split(":", 1)
-            pane_map[int(idx)] = pane_id
+            workers_pane_map[int(idx)] = pane_id
 
     # Write panes.env
     panes_env = ensemble_dir / "panes.env"
@@ -324,10 +329,10 @@ def _save_pane_ids(session: str, ensemble_dir: Path) -> None:
         f.write(f"WORKERS_SESSION={workers_session}\n")
         f.write("\n")
         f.write("# Pane IDs (use these with tmux send-keys -t)\n")
-        f.write(f"CONDUCTOR_PANE={conductor_pane}\n")
-        f.write(f"DISPATCH_PANE={pane_map.get(0, '%0')}\n")
-        f.write(f"DASHBOARD_PANE={pane_map.get(1, '%1')}\n")
-        f.write(f"WORKER_AREA_PANE={pane_map.get(2, '%2')}\n")
+        f.write(f"CONDUCTOR_PANE={conductor_pane_map.get(0, '%0')}\n")
+        f.write(f"DASHBOARD_PANE={conductor_pane_map.get(1, '%1')}\n")
+        f.write(f"DISPATCH_PANE={workers_pane_map.get(0, '%0')}\n")
+        f.write(f"WORKER_AREA_PANE={workers_pane_map.get(1, '%1')}\n")
         f.write("\n")
         f.write("# Usage examples:\n")
         f.write("# source .ensemble/panes.env\n")
