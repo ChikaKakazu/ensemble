@@ -13,6 +13,7 @@
 - /go-light で軽量ワークフロー（コスト最小）
 - 実行パターンはConductorが自動判定する
 - 自己改善フェーズを必ず実行する
+- Pythonスクリプト実行時は `uv run` を使用する（例: `uv run python script.py`, `uv run pytest`）
 
 ## ⚠️ コンパクション復帰プロトコル（全エージェント必須）
 
