@@ -96,8 +96,8 @@ your-project/
 | `ensemble init` | プロジェクトでEnsembleを初期化 |
 | `ensemble init --full` | エージェント/コマンド定義もローカルにコピー |
 | `ensemble init --force` | 既存ファイルを上書き |
-| `ensemble launch` | tmuxセッションを起動してアタッチ |
-| `ensemble launch --session NAME` | セッション名を指定 |
+| `ensemble launch` | 2つのtmuxセッションを起動してアタッチ |
+| `ensemble launch --session NAME` | セッション名のベースを指定（NAME-conductor, NAME-workers） |
 | `ensemble launch --no-attach` | セッションを起動するがアタッチしない |
 | `ensemble --version` | バージョンを表示 |
 | `ensemble --help` | ヘルプを表示 |
@@ -217,10 +217,13 @@ cd my-project
 # Ensemble初期化
 ensemble init
 
-# tmuxセッション起動
+# tmuxセッション起動（2つのセッションが作成される）
 ensemble launch
 
-# Conductorペインでタスク実行
+# 別のターミナルでworkersセッションを監視
+tmux attach -t ensemble-workers
+
+# Conductorセッションでタスク実行
 /go hello worldを出力するPythonスクリプトを作成して
 ```
 
@@ -230,7 +233,7 @@ ensemble launch
 # tmuxセッション起動
 ensemble launch
 
-# Conductorウィンドウで
+# Conductorセッションで
 /go ユーザー管理APIを実装して（CRUD + 認証）
 ```
 
@@ -240,7 +243,7 @@ ensemble launch
 # tmuxセッション起動
 ensemble launch
 
-# Conductorウィンドウで（heavy.yamlが自動選択される）
+# Conductorセッションで（heavy.yamlが自動選択される）
 /go 認証システムをJWTからセッションベースに移行して
 ```
 
@@ -260,9 +263,9 @@ ensemble launch
 
 ## tmuxセッションの構成
 
-`ensemble launch` で起動されるセッション（2ウィンドウ構成）:
+`ensemble launch` で起動されるセッション（**2つの独立したセッション**）:
 
-### ウィンドウ1: conductor（ユーザー操作用）
+### セッション1: `{name}-conductor`（ユーザー操作用）
 
 ```
 ┌─────────────────────────────────────────┐
@@ -275,32 +278,37 @@ ensemble launch
 └─────────────────────────────────────────┘
 ```
 
-### ウィンドウ2: workers（作業用）
+### セッション2: `{name}-workers`（作業用）
 
 ```
 ┌─────────────────────┬───────────────────┐
-│                     │     worker-1      │
-│      Dispatch       ├───────────────────┤
-│    (claude CLI)     │     worker-2      │
-├─────────────────────┼───────────────────┤
-│      Dashboard      │       ...         │
+│                     │                   │
+│      Dispatch       │   Worker Area     │
+│    (claude CLI)     │                   │
+├─────────────────────┤   (placeholder)   │
+│      Dashboard      │                   │
 │   (watch dashboard) │                   │
 └─────────────────────┴───────────────────┘
 ```
 
-### ウィンドウ切り替え
+### セッションへの接続
 
-| キー | 動作 |
-|------|------|
-| `Ctrl+B, n` | 次のウィンドウ |
-| `Ctrl+B, p` | 前のウィンドウ |
-| `Ctrl+B, 0` | conductorウィンドウ |
-| `Ctrl+B, 1` | workersウィンドウ |
+2つの独立したセッションなので、**2つのターミナルウィンドウ**で同時に監視できます。
 
-- **Conductor**: 指揮者エージェント（メイン操作ウィンドウ）
-- **Dispatch**: タスク配信エージェント
-- **Dashboard**: ダッシュボード表示（自動更新）
-- **Workers**: ワーカーエージェント（`./scripts/pane-setup.sh` で追加）
+```bash
+# ターミナル1: Conductorセッション
+tmux attach -t ensemble-conductor
+
+# ターミナル2: Workersセッション
+tmux attach -t ensemble-workers
+```
+
+### ペイン構成
+
+- **Conductor**: 指揮者エージェント（メイン操作セッション、Opusモデル）
+- **Dispatch**: タスク配信エージェント（Sonnetモデル）
+- **Dashboard**: ダッシュボード表示（5秒間隔で自動更新）
+- **Worker Area**: ワーカー用プレースホルダー（`./scripts/pane-setup.sh` で追加）
 
 ## 注意事項
 
