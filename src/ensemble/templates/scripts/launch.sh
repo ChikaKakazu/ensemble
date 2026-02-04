@@ -65,10 +65,8 @@ CONDUCTOR_PANE=$(tmux list-panes -t "$SESSION_CONDUCTOR:main" -F '#{pane_id}')
 echo "  Conductor pane: $CONDUCTOR_PANE"
 
 # 左右に分割（左60% : 右40%）- 右側はdashboard
-tmux split-window -h -t "$CONDUCTOR_PANE" -c "$PROJECT_DIR" -l 40%
-
-# 右側のペインID（dashboard）を取得
-DASHBOARD_PANE=$(tmux list-panes -t "$SESSION_CONDUCTOR:main" -F '#{pane_id}' | grep -v "$CONDUCTOR_PANE")
+# split-windowは新しいペインIDを返すので、それを直接キャプチャする
+DASHBOARD_PANE=$(tmux split-window -h -t "$CONDUCTOR_PANE" -c "$PROJECT_DIR" -l 40% -P -F '#{pane_id}')
 echo "  Dashboard pane: $DASHBOARD_PANE"
 
 # conductor (--agent でエージェント定義をロード)
@@ -100,10 +98,8 @@ DISPATCH_PANE=$(tmux list-panes -t "$SESSION_WORKERS:main" -F '#{pane_id}')
 echo "  Dispatch pane: $DISPATCH_PANE"
 
 # 左右に分割（左60% : 右40%）- 右側はワーカー用
-tmux split-window -h -t "$DISPATCH_PANE" -c "$PROJECT_DIR" -l 40%
-
-# 右側のペインIDを取得（ワーカー用プレースホルダー）
-WORKER_AREA_PANE=$(tmux list-panes -t "$SESSION_WORKERS:main" -F '#{pane_id}' | grep -v "$DISPATCH_PANE")
+# split-windowは新しいペインIDを返すので、それを直接キャプチャする
+WORKER_AREA_PANE=$(tmux split-window -h -t "$DISPATCH_PANE" -c "$PROJECT_DIR" -l 40% -P -F '#{pane_id}')
 echo "  Worker area pane: $WORKER_AREA_PANE"
 
 # 現在の状態:
