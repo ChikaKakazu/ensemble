@@ -19,20 +19,32 @@
 
 「デプロイして」と言われたら以下を実行:
 
-```bash
-# 1. mainブランチにいることを確認
-git checkout main
+### 1. バージョンアップ（mainブランチで）
 
-# 2. deploy/productionブランチに切り替え
+以下の2ファイルのバージョンを更新（パッチバージョンを+1）:
+- `pyproject.toml` の `version = "x.y.z"`
+- `src/ensemble/__init__.py` の `__version__ = "x.y.z"`
+
+```bash
+# コミット＆プッシュ
+git add pyproject.toml src/ensemble/__init__.py
+git commit -m "chore: bump version to x.y.z"
+git push
+```
+
+### 2. deploy/productionにマージ
+
+```bash
+# deploy/productionブランチに切り替え
 git checkout deploy/production
 
-# 3. mainをマージ
+# mainをマージ
 git merge main
 
-# 4. プッシュ
+# プッシュ（CIがPyPIにpublish）
 git push
 
-# 5. mainブランチに戻る
+# mainブランチに戻る
 git checkout main
 ```
 

@@ -76,10 +76,10 @@ tmux send-keys -t "$CONDUCTOR_PANE" \
 sleep 1
 tmux send-keys -t "$CONDUCTOR_PANE" Enter
 
-# dashboard
+# dashboard (less +F for live following, Ctrl+C to pause, F to resume)
 echo "Starting Dashboard monitor (in conductor session)..."
 tmux send-keys -t "$DASHBOARD_PANE" \
-    "watch -n 5 cat status/dashboard.md"
+    "less +F .ensemble/status/dashboard.md"
 sleep 1
 tmux send-keys -t "$DASHBOARD_PANE" Enter
 
