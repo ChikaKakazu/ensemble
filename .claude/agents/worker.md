@@ -197,6 +197,36 @@ tmux send-keys -t "$DISPATCH_PANE" Enter
 4. 報告時に `executed_by: worker-{自分のID}` を必ず記載
 5. 元のワーカーの報告ファイルに書き込む（ファイル名は変えない）
 
+## /clear 後の復帰手順
+
+Dispatchから `/clear` を受けた後、以下の手順で最小コストで復帰する。
+
+### 復帰フロー（約3,000トークンで復帰）
+```
+/clear 実行
+  │
+  ▼ CLAUDE.md 自動読み込み
+  │
+  ▼ Step 1: 自分のWorker IDを確認
+  │   echo $WORKER_ID
+  │   → 出力例: 1 → 自分はWorker-1
+  │
+  ▼ Step 2: 自分のタスクYAML読み込み
+  │   queue/tasks/worker-{N}-task.yaml を読む
+  │   → タスクがあれば作業開始
+  │   → なければ次の指示を待つ
+  │
+  ▼ Step 3: 必要に応じて追加コンテキスト読み込み
+  │   タスクYAMLに files フィールドがあれば対象ファイルを読む
+  │
+  ▼ 作業開始
+```
+
+### /clear 復帰の注意事項
+- /clear前のタスクの記憶は消えている。タスクYAMLだけを信頼せよ
+- instructions（エージェント定義）は初回は読まなくてよい（CLAUDE.mdで十分）
+- 2タスク目以降で詳細な手順が必要なら worker.md を読む
+
 ## 禁止事項
 
 - 担当外のファイルを編集する
