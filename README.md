@@ -59,10 +59,13 @@ pip install -e .
 # 1. Initialize Ensemble in your project
 ensemble init
 
-# 2. Launch the tmux session with Conductor + Dispatch
+# 2. Launch the tmux sessions (2 separate sessions)
 ensemble launch
 
-# 3. Run a task (in the Conductor pane)
+# 3. Open another terminal to view workers session
+tmux attach -t ensemble-workers
+
+# 4. Run a task in the Conductor session
 /go implement user authentication
 
 # Light workflow (minimal cost)
@@ -75,8 +78,8 @@ ensemble launch
 |---------|-------------|
 | `ensemble init` | Initialize Ensemble in current project |
 | `ensemble init --full` | Also copy agent/command definitions locally |
-| `ensemble launch` | Start tmux session with Conductor + Dispatch |
-| `ensemble launch --no-attach` | Start session without attaching |
+| `ensemble launch` | Start 2 tmux sessions (conductor + workers) |
+| `ensemble launch --no-attach` | Start sessions without attaching |
 | `ensemble --version` | Show version |
 
 ## Requirements
