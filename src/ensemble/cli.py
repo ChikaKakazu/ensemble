@@ -4,6 +4,7 @@ import click
 
 from ensemble import __version__
 from ensemble.commands.init import init
+from ensemble.commands.issue import issue
 from ensemble.commands.launch import launch
 
 
@@ -19,6 +20,7 @@ def cli() -> None:
 
 
 cli.add_command(init)
+cli.add_command(issue)
 cli.add_command(launch)
 
 
