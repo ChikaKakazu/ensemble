@@ -155,22 +155,46 @@ workflow: default
 pattern: B
 ```
 
-## ペイン構成
+## ウィンドウ・ペイン構成
+
+Ensembleは2ウィンドウ構成で動作する:
+
+```
+ウィンドウ1: conductor（Conductorがいる場所）
++----------------------------------+
+|           Conductor              |
++----------------------------------+
+
+ウィンドウ2: workers（あなたがいる場所）
++------------------+----------+
+|    dispatch      | worker-1 |
+|    (あなた)      +----------+
++------------------+ worker-2 |
+|    dashboard     +----------+
+|                  | ...      |
++------------------+----------+
+```
 
 ペイン番号ではなくペインIDで管理する。`.ensemble/panes.env` を参照。
 
 ```
+ウィンドウ名:
+  $CONDUCTOR_WINDOW: conductor
+  $WORKERS_WINDOW: workers
+
 初期状態:
-  $CONDUCTOR_PANE: Conductor
+  $CONDUCTOR_PANE: Conductor（別ウィンドウ）
   $DISPATCH_PANE: Dispatch（自分）
   $DASHBOARD_PANE: Dashboard
+  $WORKER_AREA_PANE: ワーカー用プレースホルダー
 
 ワーカー追加後（例: 2ワーカー）:
-  $CONDUCTOR_PANE: Conductor
+  $CONDUCTOR_PANE: Conductor（別ウィンドウ）
   $DISPATCH_PANE: Dispatch（自分）
+  $DASHBOARD_PANE: Dashboard
   $WORKER_1_PANE: Worker-1 (WORKER_ID=1)
   $WORKER_2_PANE: Worker-2 (WORKER_ID=2)
-  $DASHBOARD_PANE: Dashboard
+  $WORKER_COUNT: 2
 ```
 
 ## タスク配信の具体手順
