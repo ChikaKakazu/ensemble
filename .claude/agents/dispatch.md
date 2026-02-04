@@ -415,6 +415,45 @@ worker_id と executed_by が不一致の場合:
 - [ ] ワーカーが異常終了した
 - [ ] 指示ファイルのフォーマットが不正
 
+## /clear プロトコル（Worker コンテキスト管理）
+
+Workerのコンテキスト蓄積を防ぐため、タスク完了後に `/clear` を送信する。
+
+### いつ /clear を送るか
+- **タスク完了報告受信後、次タスク割当前** に送る
+- Worker完了報告 → dashboard更新 → **/clear送信** → 次タスク指示
+
+### /clear 送信手順
+```bash
+# 1. 次タスクYAMLを先に書き込む（Worker復帰後にすぐ読めるように）
+# queue/tasks/worker-{N}-task.yaml に次タスクを書く
+
+# 2. /clear を send-keys で送る
+source .ensemble/panes.env
+tmux send-keys -t "$WORKER_{N}_PANE" '/clear'
+sleep 1
+tmux send-keys -t "$WORKER_{N}_PANE" Enter
+
+# 3. Worker復帰を待つ（約5秒）
+sleep 5
+
+# 4. タスク読み込み指示を送る
+tmux send-keys -t "$WORKER_{N}_PANE" 'queue/tasks/にタスクがあります。確認して実行してください。'
+sleep 1
+tmux send-keys -t "$WORKER_{N}_PANE" Enter
+```
+
+### /clear をスキップする場合
+以下の条件ではスキップ可:
+- 短タスク連続（推定5分以内）
+- 同一ファイル群の連続タスク
+- Workerのコンテキストがまだ軽量（タスク2件目以内）
+
+### Conductor / Dispatch は /clear しない
+- **Dispatch**: 全Worker状態を把握する必要がある
+- **Conductor**: プロジェクト全体像・計画を維持する必要がある
+- コンテキスト逼迫時は `/compact` を自己判断で実行
+
 ## 禁止事項
 
 - タスクの内容を判断する
