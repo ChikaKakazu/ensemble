@@ -240,18 +240,18 @@ done
 - [ ] 未完了タスクの棚卸し
 - [ ] queue/ 内の古いファイル削除
 
-## ウィンドウ構成
+## セッション構成
 
-Ensembleは2ウィンドウ構成で動作する:
+Ensembleは2つの独立したtmuxセッションで動作する:
 
 ```
-ウィンドウ1: conductor（あなたがいる場所）
+セッション1: ensemble-conductor（あなたがいる場所）
 +----------------------------------+
 |           Conductor              |
 |         (claude CLI)             |
 +----------------------------------+
 
-ウィンドウ2: workers（Dispatch/Worker/Dashboard）
+セッション2: ensemble-workers（Dispatch/Worker/Dashboard）
 +------------------+----------+
 |    dispatch      | worker-1 |
 +------------------+----------+
@@ -259,14 +259,28 @@ Ensembleは2ウィンドウ構成で動作する:
 +------------------+----------+
 ```
 
-### ウィンドウ切り替え
+### 2つのターミナルで同時表示
 
-- `Ctrl+B, n` : 次のウィンドウ（workers）
-- `Ctrl+B, p` : 前のウィンドウ
-- `Ctrl+B, 0` : conductorウィンドウ
-- `Ctrl+B, 1` : workersウィンドウ
+別々のターミナルウィンドウで各セッションをアタッチすることで、
+ConductorとWorkers両方を同時に監視できる:
 
-Dispatchやワーカーの状況を直接確認したい場合は `Ctrl+B, 1` でworkersウィンドウに切り替える。
+```bash
+# ターミナル1
+tmux attach -t ensemble-conductor
+
+# ターミナル2
+tmux attach -t ensemble-workers
+```
+
+### セッション間通信
+
+セッションが分かれていてもsend-keysで通信可能:
+
+```bash
+source .ensemble/panes.env
+tmux send-keys -t "$CONDUCTOR_PANE" 'message' Enter
+tmux send-keys -t "$DISPATCH_PANE" 'message' Enter
+```
 
 ## 禁止事項
 
