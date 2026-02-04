@@ -15,6 +15,29 @@
 - 自己改善フェーズを必ず実行する
 - Pythonスクリプト実行時は `uv run` を使用する（例: `uv run python script.py`, `uv run pytest`）
 
+## デプロイ手順
+
+「デプロイして」と言われたら以下を実行:
+
+```bash
+# 1. mainブランチにいることを確認
+git checkout main
+
+# 2. deploy/productionブランチに切り替え
+git checkout deploy/production
+
+# 3. mainをマージ
+git merge main
+
+# 4. プッシュ
+git push
+
+# 5. mainブランチに戻る
+git checkout main
+```
+
+**注意**: 必ず最後にmainブランチに戻ること
+
 ## ⚠️ コンパクション復帰プロトコル（全エージェント必須）
 
 コンパクション後は、作業を再開する前に**必ず**以下を実行せよ:
