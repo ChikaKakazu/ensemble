@@ -49,10 +49,10 @@ $ARGUMENTS
 
 3. パターンに応じて実行:
 
-   **パターンA（takt方式）**:
-   - Taskツール（subagent）で直接実行
-   - Dispatch不要、Conductorが直接管理
-   - シンプルで高速
+   **パターンA（単一Worker）**:
+   - Dispatch経由でWorker1つで実行
+   - Conductorは計画・判断・委譲のみ
+   - 軽量タスクでも設計思想を遵守
 
    **パターンB（shogun方式）**:
    1. `queue/conductor/dispatch-instruction.yaml` に指示を書く
@@ -68,6 +68,21 @@ $ARGUMENTS
    4. 統合・相互レビュー後に完了
 
 4. 実行中は `status/dashboard.md` を都度更新（Dispatchが担当）
+
+### 完了待機（全パターン共通）
+
+Dispatchへの委譲後、ポーリングで完了を待機:
+
+```bash
+# 完了待機（30秒間隔）
+while [ ! -f "queue/reports/completion-summary.yaml" ]; do
+  sleep 30
+done
+```
+
+完了検知後:
+1. completion-summary.yaml を読み込み
+2. Phase 3（レビュー）へ進む
 
 ### Phase 3: レビュー
 

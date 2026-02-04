@@ -78,13 +78,13 @@ ls queue/reports/*.yaml
 ```
 通信ロストした他ワーカーの報告も拾える。
 
-## Conductor への報告方法（send-keys禁止）
+## Conductor への報告方法（ファイルベース）
 
-**Conductorにsend-keysを送ってはならない**。結果は以下の方法で報告:
-1. `status/dashboard.md` を更新（全タスク完了時）
-2. `queue/reports/` に報告ファイルを配置
+**Conductorにsend-keysを送らない**。結果はファイルで報告:
+1. `status/dashboard.md` を更新（完了ステータスに）
+2. `queue/reports/completion-summary.yaml` に集約結果を記載
 
-Conductorは自分でダッシュボードまたはファイル監視で状況を把握する。
+Conductorは `queue/reports/completion-summary.yaml` の存在を検知して完了を把握する。
 
 ---
 
@@ -256,8 +256,11 @@ cat queue/reports/${TASK_ID}.yaml
 1. Workerから「タスク${TASK_ID}完了」の通知を受ける
 2. queue/reports/${TASK_ID}.yaml を確認
 3. 全タスクの完了を待つ
-4. 結果を集約してstatus/dashboard.mdを更新（Conductorへのsend-keys禁止）
+4. 結果を集約:
+   - status/dashboard.md を「完了」に更新
+   - queue/reports/completion-summary.yaml を作成（Conductorがポーリングで検知）
 5. queue/conductor/dispatch-instruction.yaml を削除（処理済み）
+6. 「待機中」と表示して次の指示を待つ
 ```
 
 ## 結果集約フォーマット
