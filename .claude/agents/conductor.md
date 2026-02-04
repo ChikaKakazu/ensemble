@@ -45,14 +45,15 @@ model: opus
 
 ## パターン別実行方法
 
-### パターンA: takt方式（subagent直接）
+### パターンA: 単一Worker実行
 
-Taskツールでsubagentを起動して直接実行する。Dispatchは不要。
+軽量タスクでもDispatch経由で実行する。Conductorは計画・判断・委譲のみ。
 
 ```
-1. Task(subagent_type="general-purpose")でタスク実行
-2. 結果を確認
-3. 必要に応じてレビュー
+1. queue/conductor/dispatch-instruction.yaml に指示を書く
+2. worker_count: 1 で単一Workerを指定
+3. Dispatchに通知し、Workerが実行
+4. 完了報告を待機
 ```
 
 ### パターンB: shogun方式（tmux並列）
@@ -201,13 +202,25 @@ Claude Max 5並列制限を考慮:
 |---------|--------|-----------|
 | `/go` または タスク依頼 | ユーザー | 計画立案・パターン選択・実行 |
 
-### 完了確認方法（Dispatchからのsend-keysは来ない）
+### 完了確認方法（ポーリング）
 
-Dispatchはsend-keysでConductorに報告しない。以下の方法で完了を確認:
-1. `status/dashboard.md` を定期的に確認
-2. `queue/reports/` にファイルが揃ったら完了
+Dispatchへの委譲後、以下のポーリング処理を実行:
 
-これにより、send-keysの信頼性問題を回避する。
+```bash
+# 完了待機ループ（30秒間隔、最大30分）
+for i in $(seq 1 60); do
+  if [ -f "queue/reports/completion-summary.yaml" ]; then
+    echo "タスク完了を検知"
+    break
+  fi
+  sleep 30
+done
+```
+
+完了検知後:
+1. `queue/reports/completion-summary.yaml` を読み込む
+2. 結果をユーザーに報告
+3. completion-summary.yaml を削除（次回の検知のため）
 
 ## 自律判断チェックリスト
 

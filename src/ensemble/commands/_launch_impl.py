@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -47,6 +48,21 @@ def run_launch(session: str = "ensemble", attach: bool = True) -> None:
         sys.exit(1)
 
     click.echo(f"Launching Ensemble session '{session}'...")
+
+    # Clean up queue directories
+    queue_dir = project_root / "queue"
+    if queue_dir.exists():
+        for subdir in ["tasks", "processing", "reports", "ack"]:
+            subdir_path = queue_dir / subdir
+            if subdir_path.exists():
+                for f in subdir_path.glob("*.yaml"):
+                    f.unlink()
+                for f in subdir_path.glob("*.ack"):
+                    f.unlink()
+
+    # Ensure queue directories exist
+    for subdir in ["tasks", "processing", "reports", "ack", "conductor"]:
+        (queue_dir / subdir).mkdir(parents=True, exist_ok=True)
 
     # Get agent paths
     agents = _resolve_agent_paths(project_root)
@@ -157,13 +173,21 @@ def _create_session(session: str, project_root: Path, agents: dict[str, Path]) -
     # Start Claude in Conductor pane
     conductor_agent = agents.get("conductor")
     if conductor_agent:
-        cmd = f"claude --agent {conductor_agent}"
+        cmd = f"MAX_THINKING_TOKENS=0 claude --agent {conductor_agent} --model opus --dangerously-skip-permissions"
     else:
-        cmd = "claude"
+        cmd = "MAX_THINKING_TOKENS=0 claude --model opus --dangerously-skip-permissions"
     subprocess.run(
-        ["tmux", "send-keys", "-t", f"{session}:conductor", cmd, "Enter"],
+        ["tmux", "send-keys", "-t", f"{session}:conductor", cmd],
         check=True,
     )
+    time.sleep(1)
+    subprocess.run(
+        ["tmux", "send-keys", "-t", f"{session}:conductor", "Enter"],
+        check=True,
+    )
+
+    # フレンドリーファイア防止
+    time.sleep(3)
 
     # Create workers window
     subprocess.run(
@@ -196,18 +220,28 @@ def _create_session(session: str, project_root: Path, agents: dict[str, Path]) -
     # Start Claude in Dispatch pane (pane 0 - left top)
     dispatch_agent = agents.get("dispatch")
     if dispatch_agent:
-        cmd = f"claude --agent {dispatch_agent}"
+        cmd = f"claude --agent {dispatch_agent} --model sonnet --dangerously-skip-permissions"
     else:
-        cmd = "claude"
+        cmd = "claude --model sonnet --dangerously-skip-permissions"
     subprocess.run(
-        ["tmux", "send-keys", "-t", f"{session}:workers.0", cmd, "Enter"],
+        ["tmux", "send-keys", "-t", f"{session}:workers.0", cmd],
+        check=True,
+    )
+    time.sleep(1)
+    subprocess.run(
+        ["tmux", "send-keys", "-t", f"{session}:workers.0", "Enter"],
         check=True,
     )
 
     # Start dashboard watch in Dashboard pane (pane 1 - left bottom)
     dashboard_path = project_root / ".ensemble" / "status" / "dashboard.md"
     subprocess.run(
-        ["tmux", "send-keys", "-t", f"{session}:workers.1", f"watch -n 2 cat {dashboard_path}", "Enter"],
+        ["tmux", "send-keys", "-t", f"{session}:workers.1", f"watch -n 5 cat {dashboard_path}"],
+        check=True,
+    )
+    time.sleep(1)
+    subprocess.run(
+        ["tmux", "send-keys", "-t", f"{session}:workers.1", "Enter"],
         check=True,
     )
 
