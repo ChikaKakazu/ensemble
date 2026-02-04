@@ -78,13 +78,35 @@ ls queue/reports/*.yaml
 ```
 通信ロストした他ワーカーの報告も拾える。
 
-## Conductor への報告方法（ファイルベース）
+## Conductor への報告方法（ファイルベース + 通知）
 
+### 1. ファイル報告（プライマリ）
 **Conductorにsend-keysを送らない**。結果はファイルで報告:
 1. `status/dashboard.md` を更新（完了ステータスに）
 2. `queue/reports/completion-summary.yaml` に集約結果を記載
 
+### 2. 通知（セカンダリ）
+completion-summary.yaml作成後、Conductorに完了を通知:
+
+#### 通知手順
+```bash
+# panes.envを読み込む
+source .ensemble/panes.env
+
+# Conductorに通知（2回分割）
+tmux send-keys -t "$CONDUCTOR_PANE" '全タスク完了。queue/reports/completion-summary.yamlを確認してください'
+sleep 1
+tmux send-keys -t "$CONDUCTOR_PANE" Enter
+```
+
+#### 通知失敗時
+- send-keysが失敗してもエラーにしない
+- Conductorがポーリングでフォールバック
+- ファイル報告が最優先（通知は補助）
+
+### 3. ポーリング（フォールバック）
 Conductorは `queue/reports/completion-summary.yaml` の存在を検知して完了を把握する。
+通知は効率化のための補助機能。
 
 ---
 
@@ -242,13 +264,39 @@ done
 
 ## 完了報告の収集
 
-```bash
-# 完了報告の確認
-ls queue/reports/*.yaml
+### プライマリ: 通知ベース
+Workerから「タスク${TASK_ID}完了」の通知を受けたら、
+queue/reports/${TASK_ID}-completed.yaml を確認する。
 
-# 報告内容の読み取り
-cat queue/reports/${TASK_ID}.yaml
+### フォールバック: ポーリング
+タイムアウト（例: 3分）後、Workerから通知がない場合:
+1. queue/reports/ を全スキャン
+2. 新しい完了報告ファイルを検出
+3. 未検出のタスクは「進行中」と判断し、追加で2分待機
+4. 再度タイムアウト → エスカレーション
+
+### 実装例
+```bash
+# タイムアウト後のスキャン
+echo "⏰ タイムアウト。完了報告をスキャン中..."
+ls queue/reports/*.yaml | grep -v escalation | grep -v completion-summary
+
+# 各タスクの完了状態を確認
+for task_id in task-001 task-002 ...; do
+  if [ -f "queue/reports/${task_id}-completed.yaml" ]; then
+    echo "✅ ${task_id}: 完了済み（通知なしで検出）"
+  else
+    echo "⏳ ${task_id}: 未完了"
+  fi
+done
 ```
+
+### 報告の全確認原則（既存ルールを強調）
+Workerから起こされたら、起こした1人だけでなく**全ワーカーの報告ファイルをスキャン**:
+```bash
+ls queue/reports/*.yaml
+```
+通信ロストした他ワーカーの報告も拾える。
 
 ## 完了判定と報告フロー
 

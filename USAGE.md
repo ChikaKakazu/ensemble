@@ -265,30 +265,52 @@ ensemble launch
 
 `ensemble launch` で起動されるセッション（**2つの独立したセッション**）:
 
-### セッション1: `{name}-conductor`（ユーザー操作用）
-
-```
-┌─────────────────────────────────────────┐
-│                                         │
-│              Conductor                  │
-│            (claude CLI)                 │
-│                                         │
-│    ユーザーが /go コマンドを入力する場所  │
-│                                         │
-└─────────────────────────────────────────┘
-```
-
-### セッション2: `{name}-workers`（作業用）
+### セッション1: `{name}-conductor`（ユーザー操作用 + ダッシュボード）
 
 ```
 ┌─────────────────────┬───────────────────┐
 │                     │                   │
-│      Dispatch       │   Worker Area     │
-│    (claude CLI)     │                   │
-├─────────────────────┤   (placeholder)   │
-│      Dashboard      │                   │
-│   (watch dashboard) │                   │
+│      Conductor      │     Dashboard     │
+│    (claude CLI)     │  (watch dashboard)│
+│                     │                   │
+│ ユーザーが /go を   │  進捗をリアルタイム │
+│ 入力する場所        │  で監視           │
+│                     │                   │
 └─────────────────────┴───────────────────┘
+```
+
+### セッション2: `{name}-workers`（作業用）
+
+初期状態:
+```
+┌─────────────────────┬───────────────────┐
+│                     │                   │
+│      Dispatch       │   Worker Area     │
+│    (claude CLI)     │   (placeholder)   │
+│                     │                   │
+└─────────────────────┴───────────────────┘
+```
+
+Worker 2名追加後:
+```
+┌─────────────────────┬──────────┐
+│                     │ worker-1 │
+│      Dispatch       ├──────────┤
+│                     │ worker-2 │
+└─────────────────────┴──────────┘
+```
+
+Worker 4名追加後:
+```
+┌─────────────────────┬──────────┐
+│                     │ worker-1 │
+│                     ├──────────┤
+│      Dispatch       │ worker-2 │
+│                     ├──────────┤
+│                     │ worker-3 │
+│                     ├──────────┤
+│                     │ worker-4 │
+└─────────────────────┴──────────┘
 ```
 
 ### セッションへの接続
@@ -296,19 +318,22 @@ ensemble launch
 2つの独立したセッションなので、**2つのターミナルウィンドウ**で同時に監視できます。
 
 ```bash
-# ターミナル1: Conductorセッション
+# ターミナル1: Conductorセッション（操作 + ダッシュボード監視）
 tmux attach -t ensemble-conductor
 
-# ターミナル2: Workersセッション
+# ターミナル2: Workersセッション（Dispatch + Workers）
 tmux attach -t ensemble-workers
 ```
 
 ### ペイン構成
 
-- **Conductor**: 指揮者エージェント（メイン操作セッション、Opusモデル）
-- **Dispatch**: タスク配信エージェント（Sonnetモデル）
+**Conductorセッション（左60% : 右40%）**:
+- **Conductor**: 指揮者エージェント（Opusモデル、思考トークン無効）
 - **Dashboard**: ダッシュボード表示（5秒間隔で自動更新）
-- **Worker Area**: ワーカー用プレースホルダー（`./scripts/pane-setup.sh` で追加）
+
+**Workersセッション（左60% : 右40%）**:
+- **Dispatch**: タスク配信エージェント（Sonnetモデル）
+- **Worker Area**: ワーカー用（`./scripts/pane-setup.sh` で追加、最大4名）
 
 ## 注意事項
 

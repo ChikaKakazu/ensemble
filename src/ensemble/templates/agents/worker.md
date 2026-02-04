@@ -115,6 +115,31 @@ errors: []  # エラーがあれば記載
 completed_at: "2026-02-03T10:30:00Z"
 ```
 
+## 完了報告後の通知プロトコル
+
+完了報告ファイル（queue/reports/task-XXX-completed.yaml）を作成した後、
+必ずDispatchペインに通知せよ:
+
+### 通知手順
+1. panes.envを読み込む
+2. DISPATCH_PANEにsend-keysで通知（2回分割）
+3. フォーマット: 「タスク${TASK_ID}完了。queue/reports/をご確認ください」
+
+### 実装例
+```bash
+# panes.envを読み込む
+source .ensemble/panes.env
+
+# Dispatchに通知（2回分割）
+tmux send-keys -t "$DISPATCH_PANE" 'タスク${TASK_ID}完了。queue/reports/をご確認ください'
+sleep 1
+tmux send-keys -t "$DISPATCH_PANE" Enter
+```
+
+### 通知失敗時
+- send-keysが失敗してもエラーにしない（Dispatchがポーリングでフォールバック）
+- 完了報告ファイルが最優先（通知は補助）
+
 ## エラー発生時
 
 1. エラー内容を完了報告に記載

@@ -46,19 +46,15 @@ rm -f "$QUEUE_DIR/ack/"*.ack 2>/dev/null || true
 echo "$(date -Iseconds) Session started, queue cleaned" >> "$LOG_DIR/ensemble-$(date +%Y%m%d).log"
 
 # === レイアウト ===
-# セッション1: conductor（フルスクリーン）
-# +----------------------------------+
-# |                                  |
-# |           Conductor              |
-# |                                  |
-# +----------------------------------+
+# セッション1: conductor
+# +------------------+------------------+
+# |   Conductor      |   dashboard      |
+# +------------------+------------------+
 #
 # セッション2: workers
-# +------------------+----------+
-# |    dispatch      | (worker) |
-# +------------------+----------+
-# |    dashboard     | (worker) |
-# +------------------+----------+
+# +------------------+------------------+
+# |   dispatch       |   worker-area    |
+# +------------------+------------------+
 
 # === セッション1: Conductor ===
 echo "Creating conductor session..."
@@ -68,12 +64,29 @@ tmux new-session -d -s "$SESSION_CONDUCTOR" -n "main" -c "$PROJECT_DIR"
 CONDUCTOR_PANE=$(tmux list-panes -t "$SESSION_CONDUCTOR:main" -F '#{pane_id}')
 echo "  Conductor pane: $CONDUCTOR_PANE"
 
+# 左右に分割（左60% : 右40%）- 右側はdashboard
+tmux split-window -h -t "$CONDUCTOR_PANE" -c "$PROJECT_DIR" -l 40%
+
+# 右側のペインID（dashboard）を取得
+DASHBOARD_PANE=$(tmux list-panes -t "$SESSION_CONDUCTOR:main" -F '#{pane_id}' | grep -v "$CONDUCTOR_PANE")
+echo "  Dashboard pane: $DASHBOARD_PANE"
+
 # conductor (--agent でエージェント定義をロード)
 echo "Starting Conductor (Opus, no thinking)..."
 tmux send-keys -t "$CONDUCTOR_PANE" \
     "MAX_THINKING_TOKENS=0 claude --agent conductor --model opus --dangerously-skip-permissions"
 sleep 1
 tmux send-keys -t "$CONDUCTOR_PANE" Enter
+
+# dashboard
+echo "Starting Dashboard monitor (in conductor session)..."
+tmux send-keys -t "$DASHBOARD_PANE" \
+    "watch -n 5 cat status/dashboard.md"
+sleep 1
+tmux send-keys -t "$DASHBOARD_PANE" Enter
+
+# conductorペインを選択
+tmux select-pane -t "$CONDUCTOR_PANE"
 
 # フレンドリーファイア防止
 sleep 3
@@ -90,20 +103,12 @@ echo "  Dispatch pane: $DISPATCH_PANE"
 tmux split-window -h -t "$DISPATCH_PANE" -c "$PROJECT_DIR" -l 40%
 
 # 右側のペインIDを取得（ワーカー用プレースホルダー）
-RIGHT_PANE=$(tmux list-panes -t "$SESSION_WORKERS:main" -F '#{pane_id}' | grep -v "$DISPATCH_PANE")
-echo "  Right pane (for workers): $RIGHT_PANE"
-
-# 左ペイン（dispatch）を上下に分割（dispatch / dashboard）
-tmux split-window -v -t "$DISPATCH_PANE" -c "$PROJECT_DIR" -l 50%
-
-# dashboardペインIDを取得（dispatchとright以外）
-DASHBOARD_PANE=$(tmux list-panes -t "$SESSION_WORKERS:main" -F '#{pane_id}' | grep -v "$DISPATCH_PANE" | grep -v "$RIGHT_PANE")
-echo "  Dashboard pane: $DASHBOARD_PANE"
+WORKER_AREA_PANE=$(tmux list-panes -t "$SESSION_WORKERS:main" -F '#{pane_id}' | grep -v "$DISPATCH_PANE")
+echo "  Worker area pane: $WORKER_AREA_PANE"
 
 # 現在の状態:
-# DISPATCH_PANE: dispatch (左上)
-# DASHBOARD_PANE: dashboard (左下)
-# RIGHT_PANE: ワーカー用プレースホルダー (右)
+# DISPATCH_PANE: dispatch (左、フルハイト)
+# WORKER_AREA_PANE: ワーカー用プレースホルダー (右、フルハイト)
 
 # dispatch (--agent でエージェント定義をロード)
 echo "Starting Dispatch (Sonnet)..."
@@ -115,18 +120,11 @@ tmux send-keys -t "$DISPATCH_PANE" Enter
 # フレンドリーファイア防止
 sleep 3
 
-# dashboard
-echo "Starting Dashboard monitor..."
-tmux send-keys -t "$DASHBOARD_PANE" \
-    "watch -n 5 cat status/dashboard.md"
-sleep 1
-tmux send-keys -t "$DASHBOARD_PANE" Enter
-
 # 右側のプレースホルダーにメッセージ表示
-tmux send-keys -t "$RIGHT_PANE" \
+tmux send-keys -t "$WORKER_AREA_PANE" \
     "echo '=== Worker Area ===' && echo 'Run: ./scripts/pane-setup.sh [count]' && echo 'to add workers here.'"
 sleep 1
-tmux send-keys -t "$RIGHT_PANE" Enter
+tmux send-keys -t "$WORKER_AREA_PANE" Enter
 
 # dispatchペインを選択
 tmux select-pane -t "$DISPATCH_PANE"
@@ -143,7 +141,7 @@ WORKERS_SESSION=$SESSION_WORKERS
 CONDUCTOR_PANE=$CONDUCTOR_PANE
 DISPATCH_PANE=$DISPATCH_PANE
 DASHBOARD_PANE=$DASHBOARD_PANE
-WORKER_AREA_PANE=$RIGHT_PANE
+WORKER_AREA_PANE=$WORKER_AREA_PANE
 
 # Usage examples:
 # source .ensemble/panes.env
@@ -159,23 +157,20 @@ echo ""
 echo "Two separate tmux sessions created!"
 echo ""
 echo "Session 1: $SESSION_CONDUCTOR"
-echo "  +----------------------------------+"
-echo "  |           Conductor              |"
-echo "  |         (claude CLI)             |"
-echo "  +----------------------------------+"
+echo "  +------------------+------------------+"
+echo "  |   Conductor      |   dashboard      |"
+echo "  +------------------+------------------+"
 echo ""
 echo "Session 2: $SESSION_WORKERS"
-echo "  +------------------+----------+"
-echo "  |    dispatch      | (worker) |"
-echo "  +------------------+----------+"
-echo "  |    dashboard     | (worker) |"
-echo "  +------------------+----------+"
+echo "  +------------------+------------------+"
+echo "  |   dispatch       |   worker-area    |"
+echo "  +------------------+------------------+"
 echo ""
 echo "Panes:"
 echo "  - $CONDUCTOR_PANE : Conductor (Opus, no thinking)"
-echo "  - $DISPATCH_PANE  : Dispatch (Sonnet)"
 echo "  - $DASHBOARD_PANE : Dashboard monitor"
-echo "  - $RIGHT_PANE     : Worker area (placeholder)"
+echo "  - $DISPATCH_PANE  : Dispatch (Sonnet)"
+echo "  - $WORKER_AREA_PANE : Worker area (placeholder)"
 echo ""
 echo "To view both simultaneously, open two terminal windows:"
 echo "  Terminal 1: tmux attach -t $SESSION_CONDUCTOR"
