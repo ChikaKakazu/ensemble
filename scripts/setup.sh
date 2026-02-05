@@ -79,12 +79,25 @@ summaryの「次のステップ」を見てすぐ作業してはならぬ。
 - パターンB: 中規模タスク → tmux多ペインで並列実行
 - パターンC: 大規模タスク → git worktreeで分離 + 各worktree内並列
 
-## 学習済みルール（自動追記）
-<!-- learner agentが自動追記するセクション -->
-
 CLAUDEEOF
 else
     echo "CLAUDE.md already exists, skipping..."
+fi
+
+# 3.5. Create LEARNED.md (only if it doesn't exist)
+if [ ! -f LEARNED.md ]; then
+    echo "Creating LEARNED.md..."
+    cat > LEARNED.md << 'LEARNEDEOF'
+# 学習済みルール（自動追記）
+
+<!-- learner agentが自動追記するセクション -->
+
+このファイルは、Ensembleのlearnerエージェントが自動的に更新します。
+タスク実行から学んだパターン、ガイドライン、改善点が記録されます。
+
+LEARNEDEOF
+else
+    echo "LEARNED.md already exists, skipping..."
 fi
 
 # 4. Create dashboard.md

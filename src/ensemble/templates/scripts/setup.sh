@@ -79,15 +79,25 @@ summaryの「次のステップ」を見てすぐ作業してはならぬ。
 - パターンB: 中規模タスク → tmux多ペインで並列実行
 - パターンC: 大規模タスク → git worktreeで分離 + 各worktree内並列
 
-## 学習済みルール（自動追記）
-<!-- learner agentが自動追記するセクション -->
-
 CLAUDEEOF
 else
     echo "CLAUDE.md already exists, skipping..."
 fi
 
-# 4. Create dashboard.md
+# 4. Create LEARNED.md (only if it doesn't exist)
+if [ ! -f LEARNED.md ]; then
+    echo "Creating LEARNED.md..."
+    cat > LEARNED.md << 'LEARNEDEOF'
+# 学習済みルール
+
+<!-- learner agentが自動追記するセクション -->
+
+LEARNEDEOF
+else
+    echo "LEARNED.md already exists, skipping..."
+fi
+
+# 5. Create dashboard.md
 echo "Creating status/dashboard.md..."
 cat > status/dashboard.md << 'EOF'
 # 🎵 Ensemble Dashboard
@@ -113,7 +123,7 @@ cat > status/dashboard.md << 'EOF'
 *Last updated: -*
 EOF
 
-# 5. Create .gitignore additions
+# 6. Create .gitignore additions
 if [ -f .gitignore ]; then
     if ! grep -q "queue/tasks/" .gitignore 2>/dev/null; then
         echo "" >> .gitignore

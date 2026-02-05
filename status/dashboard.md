@@ -1,45 +1,63 @@
 # Ensemble Dashboard
 
 ## Current Status
-**✅ /clearプロトコル実装完了**
+**✅ CLAUDE.md分割の影響修正完了**
 
 ## 完了タスク
 | Task | Worker | Status | Details |
 |------|--------|--------|---------|
-| task-001 | worker-1 | ✅ completed | /clearプロトコル実装（4ファイル） |
+| task-001 | worker-1 | ✅ completed | learner.md, improve.md, setup.sh 修正 |
+| task-002 | worker-2 | ✅ completed | テンプレート版3ファイル修正 |
 
 ## 実装内容
 
-### dispatch.md（2ファイル）
-- セクション追加: 「## /clear プロトコル（Worker コンテキスト管理）」
-- いつ送るか: タスク完了後、次タスク割当前
-- 送信手順: bash実装例（tmux send-keys）
-- スキップ条件: 短タスク連続、同一ファイル群
-- Conductor/Dispatchは/clearしない理由を明記
+### Issue: CLAUDE.md分割による影響修正
 
-### worker.md（2ファイル）
-- セクション追加: 「## /clear 後の復帰手順」
-- 復帰フロー: WORKER_ID確認 → タスクYAML読み込み → 作業開始
-- 復帰コスト: 約3,000トークン（最小限）
-- 注意事項: /clear前のタスクの記憶は消えている
+**背景:**
+- CLAUDE.md（284行）を分割し、.claude/rules/に移動
+- 学習済みルールをLEARNED.mdに分離
+- learner agentとimprove commandが追記先を見つけられなくなった
 
-## 検証結果
-- ✅ 構文チェック: 全ファイルmarkdown準拠
-- ✅ ペア一貫性: .claude/agents/ と src/ensemble/templates/agents/ で同一
-- ✅ セクション配置: 適切
+**修正完了（6ファイル）:**
 
-## 期待効果
-- Workerのコンテキスト蓄積問題を解決
-- 復帰コスト: 約3,000トークン（効率的）
-- 長時間セッションでのコスト削減
+#### task-001（Worker-1）
+1. `.claude/agents/learner.md`（6箇所修正）
+   - 「CLAUDE.md更新提案」→「LEARNED.md更新提案」に変更
+   - 禁止事項「CLAUDE.mdを直接編集」→「LEARNED.mdを直接編集」に変更
+   - プロトコル内の参照も全て更新
 
-## 次のステップ
-- 次回タスク実行時から/clearプロトコル適用
-- Conductorに完了報告提出
-- 待機状態に移行
+2. `.claude/commands/improve.md`（6箇所修正）
+   - description: 「CLAUDE.md更新提案」→「LEARNED.md更新提案」
+   - Step 4のセクション名を更新
+   - Step 5の提案表示フォーマットを更新
+   - grepコマンドの対象をLEARNED.mdに変更
+   - 注意事項の参照を全て更新
+
+3. `scripts/setup.sh`
+   - CLAUDE.md内の「学習済みルール（自動追記）」セクションを削除
+   - LEARNED.md作成処理を新規追加（3.5ステップ）
+   - LEARNED.mdのテンプレートを追加（説明コメント含む）
+
+#### task-002（Worker-2）
+1. `src/ensemble/templates/agents/learner.md`
+   - 「学習済みルール」セクションへの参照をLEARNED.mdに変更
+   - 追記先を明示
+
+2. `src/ensemble/templates/commands/improve.md`
+   - CLAUDE.md更新提案→LEARNED.md更新提案に変更
+   - LEARNED.md作成処理を追加
+
+3. `src/ensemble/templates/scripts/setup.sh`
+   - CLAUDE.mdから「学習済みルール」セクションを削除
+   - LEARNED.md作成処理を追加（ステップ4）
+
+## 実行結果
+- ✅ 全6ファイル修正完了
+- ✅ learner agentとimprove commandが正しくLEARNED.mdに追記可能
+- ✅ エラーなし
 
 ## 詳細報告
 queue/reports/completion-summary.yaml を参照
 
 ---
-*Last updated: 2026-02-04 23:51:15*
+*Last updated: 2025-02-05T21:58:00+09:00*
