@@ -84,11 +84,12 @@ $ARGUMENTS
 |---------|------|--------|
 | ... | ... | YES/NO |
 
-### CLAUDE.md更新提案
+### LEARNED.md更新提案
 （提案がある場合のみ表示）
 
 ```markdown
-## 学習済みルール（自動追記）
+# 学習済みルール
+
 - {提案されるルール}
 ```
 
@@ -101,11 +102,19 @@ $ARGUMENTS
 
 ## 更新の適用
 
-ユーザーが承認した場合のみ、CLAUDE.mdの「学習済みルール」セクションに追記する。
+ユーザーが承認した場合のみ、`LEARNED.md`に追記する。
 
 ```bash
-# 追記場所の確認
-grep -n "学習済みルール" CLAUDE.md
+# LEARNED.mdの存在確認
+if [ -f LEARNED.md ]; then
+  # 既存の内容に追記
+  echo "- {新しいルール}" >> LEARNED.md
+else
+  # ファイルが存在しない場合は作成
+  echo "# 学習済みルール" > LEARNED.md
+  echo "" >> LEARNED.md
+  echo "- {新しいルール}" >> LEARNED.md
+fi
 ```
 
 ## 注意事項
