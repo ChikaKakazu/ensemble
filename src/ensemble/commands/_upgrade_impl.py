@@ -1,0 +1,276 @@
+"""Implementation of the ensemble upgrade command."""
+
+import shutil
+import difflib
+from datetime import datetime
+from pathlib import Path
+from typing import List, Tuple
+
+import click
+
+from ensemble.templates import get_template_path
+from ensemble.version_tracker import (
+    check_file_modified,
+    compute_file_hash,
+    load_versions,
+    record_file_version,
+)
+
+
+def run_upgrade(dry_run: bool = False, force: bool = False, diff: bool = False) -> None:
+    """Run the upgrade command implementation.
+
+    Args:
+        dry_run: If True, show what would be updated without making changes.
+        force: If True, force update all files, creating backups of modified files.
+        diff: If True, show diff of changes before applying.
+    """
+    project_root = Path.cwd()
+    ensemble_dir = project_root / ".ensemble"
+
+    if not ensemble_dir.exists():
+        click.echo(click.style("Error: Not an Ensemble project. Run 'ensemble init' first.", fg="red"))
+        return
+
+    click.echo("Checking for updates...\n")
+
+    # Check if --full was used (local agent definitions exist)
+    claude_agents_dir = project_root / ".claude" / "agents"
+    if not claude_agents_dir.exists():
+        click.echo(click.style("No local agent definitions found.", fg="yellow"))
+        click.echo("This project was initialized without --full flag.")
+        click.echo("Agent definitions will be used from the package.\n")
+        click.echo("To customize agents locally, run: ensemble init --full --force")
+        return
+
+    # Collect files to update
+    files_to_update = []
+    files_to_update.extend(_scan_directory("agents", project_root))
+    files_to_update.extend(_scan_directory("commands", project_root))
+
+    if not files_to_update:
+        click.echo(click.style("All files are up to date!", fg="green"))
+        return
+
+    # Display what will be updated
+    click.echo("Files to update:")
+    for status, relative_path, reason in files_to_update:
+        icon = _get_status_icon(status)
+        click.echo(f"  {icon} {relative_path} {click.style(reason, fg=_get_status_color(status))}")
+
+    click.echo()
+
+    # Show diff if requested
+    if diff:
+        _show_diff(files_to_update, project_root)
+
+    # Apply updates unless dry-run
+    if dry_run:
+        click.echo(click.style("Dry run - no changes made.", fg="yellow"))
+        _print_summary(files_to_update, dry_run=True)
+    else:
+        _apply_updates(files_to_update, project_root, force)
+        _print_summary(files_to_update, dry_run=False)
+
+
+def _scan_directory(template_type: str, project_root: Path) -> List[Tuple[str, str, str]]:
+    """Scan a template directory and determine what needs updating.
+
+    Args:
+        template_type: "agents" or "commands"
+        project_root: Root directory of the project
+
+    Returns:
+        List of (status, relative_path, reason) tuples
+        Status can be: "new", "update", "skip", "force_update"
+    """
+    template_dir = get_template_path(template_type)
+    if not template_dir.exists():
+        return []
+
+    local_dir = project_root / ".claude" / template_type
+    if not local_dir.exists():
+        return []
+
+    results = []
+
+    for template_file in template_dir.glob("*.md"):
+        local_file = local_dir / template_file.name
+        relative_path = str(local_file.relative_to(project_root))
+
+        if not local_file.exists():
+            results.append(("new", relative_path, "(new file)"))
+        else:
+            # Check if file was modified by user
+            if check_file_modified(project_root, relative_path, local_file):
+                results.append(("skip", relative_path, "(modified locally, skipping)"))
+            else:
+                # Check if template has changed
+                template_hash = compute_file_hash(template_file)
+                local_hash = compute_file_hash(local_file)
+                if template_hash != local_hash:
+                    results.append(("update", relative_path, "(no local changes)"))
+                # else: file is up to date, don't include in list
+
+    return results
+
+
+def _get_status_icon(status: str) -> str:
+    """Get icon for status."""
+    icons = {
+        "new": "+",
+        "update": "✓",
+        "skip": "⚠",
+        "force_update": "!",
+    }
+    return icons.get(status, "?")
+
+
+def _get_status_color(status: str) -> str:
+    """Get color for status."""
+    colors = {
+        "new": "green",
+        "update": "green",
+        "skip": "yellow",
+        "force_update": "red",
+    }
+    return colors.get(status, "white")
+
+
+def _show_diff(files_to_update: List[Tuple[str, str, str]], project_root: Path) -> None:
+    """Show diff for files that will be updated.
+
+    Args:
+        files_to_update: List of (status, relative_path, reason) tuples
+        project_root: Root directory of the project
+    """
+    click.echo(click.style("Showing diffs:", fg="cyan"))
+    click.echo()
+
+    for status, relative_path, _ in files_to_update:
+        if status == "new":
+            continue  # Skip new files (no diff to show)
+
+        if status == "skip":
+            continue  # Skip files that won't be updated
+
+        local_file = project_root / relative_path
+        template_file = _get_template_file_for_relative_path(relative_path)
+
+        if not template_file or not template_file.exists():
+            continue
+
+        click.echo(click.style(f"--- {relative_path}", fg="cyan"))
+
+        with open(local_file, "r") as f:
+            local_lines = f.readlines()
+        with open(template_file, "r") as f:
+            template_lines = f.readlines()
+
+        diff = difflib.unified_diff(
+            local_lines,
+            template_lines,
+            fromfile=f"{relative_path} (current)",
+            tofile=f"{relative_path} (new)",
+            lineterm="",
+        )
+
+        for line in diff:
+            if line.startswith("---") or line.startswith("+++"):
+                click.echo(click.style(line, fg="cyan"))
+            elif line.startswith("-"):
+                click.echo(click.style(line, fg="red"))
+            elif line.startswith("+"):
+                click.echo(click.style(line, fg="green"))
+            else:
+                click.echo(line)
+
+        click.echo()
+
+
+def _apply_updates(files_to_update: List[Tuple[str, str, str]], project_root: Path, force: bool) -> None:
+    """Apply updates to files.
+
+    Args:
+        files_to_update: List of (status, relative_path, reason) tuples
+        project_root: Root directory of the project
+        force: If True, force update modified files with backup
+    """
+    for status, relative_path, _ in files_to_update:
+        local_file = project_root / relative_path
+
+        # Skip modified files unless force is enabled
+        if status == "skip":
+            if not force:
+                continue
+            # Create backup before overwriting
+            _create_backup(local_file)
+            status = "force_update"
+
+        template_file = _get_template_file_for_relative_path(relative_path)
+        if not template_file or not template_file.exists():
+            click.echo(click.style(f"  Warning: Template not found for {relative_path}", fg="yellow"))
+            continue
+
+        # Copy file from template
+        shutil.copy(template_file, local_file)
+
+        # Record new version
+        record_file_version(project_root, relative_path, local_file)
+
+
+def _create_backup(file_path: Path) -> None:
+    """Create a backup of a file.
+
+    Args:
+        file_path: Path to the file to backup
+    """
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = file_path.with_suffix(f".backup_{timestamp}{file_path.suffix}")
+    shutil.copy(file_path, backup_path)
+    click.echo(f"  Created backup: {backup_path.name}")
+
+
+def _get_template_file_for_relative_path(relative_path: str) -> Path:
+    """Get template file path for a relative path.
+
+    Args:
+        relative_path: Relative path like ".claude/agents/conductor.md"
+
+    Returns:
+        Path to the template file
+    """
+    parts = Path(relative_path).parts
+    if ".claude" in parts:
+        idx = parts.index(".claude")
+        if idx + 1 < len(parts):
+            template_type = parts[idx + 1]  # "agents" or "commands"
+            filename = parts[-1]
+            return get_template_path(template_type) / filename
+    return None
+
+
+def _print_summary(files_to_update: List[Tuple[str, str, str]], dry_run: bool) -> None:
+    """Print summary of what was (or would be) updated.
+
+    Args:
+        files_to_update: List of (status, relative_path, reason) tuples
+        dry_run: Whether this was a dry run
+    """
+    new_count = sum(1 for s, _, _ in files_to_update if s == "new")
+    update_count = sum(1 for s, _, _ in files_to_update if s == "update")
+    skip_count = sum(1 for s, _, _ in files_to_update if s == "skip")
+    force_count = sum(1 for s, _, _ in files_to_update if s == "force_update")
+
+    verb = "Would update" if dry_run else "Updated"
+    click.echo(
+        f"{verb} {update_count} file{'s' if update_count != 1 else ''}, "
+        f"{'would add' if dry_run else 'added'} {new_count} new file{'s' if new_count != 1 else ''}, "
+        f"skipped {skip_count} modified file{'s' if skip_count != 1 else ''}."
+    )
+
+    if force_count > 0:
+        click.echo(f"Force updated {force_count} modified file{'s' if force_count != 1 else ''} with backups.")
+
+    if skip_count > 0 and not dry_run:
+        click.echo(click.style("\nTip: Use --force to update modified files (backups will be created).", fg="cyan"))

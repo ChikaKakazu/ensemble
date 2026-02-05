@@ -7,6 +7,7 @@ from typing import Optional
 import click
 
 from ensemble.templates import get_template_path
+from ensemble.version_tracker import record_file_version
 
 
 def run_init(full: bool = False, force: bool = False) -> None:
@@ -191,6 +192,9 @@ def _copy_agent_definitions(project_root: Path, force: bool) -> None:
             click.echo(f"  Skipped {agent_file.name} (exists, use --force to overwrite)")
             continue
         shutil.copy(agent_file, dest)
+        # Record file version for upgrade tracking
+        relative_path = str(dest.relative_to(project_root))
+        record_file_version(project_root, relative_path, dest)
         click.echo(f"  Copied {agent_file.name}")
 
     # Also copy commands
@@ -205,4 +209,7 @@ def _copy_agent_definitions(project_root: Path, force: bool) -> None:
                 click.echo(f"  Skipped {cmd_file.name} (exists)")
                 continue
             shutil.copy(cmd_file, dest)
+            # Record file version for upgrade tracking
+            relative_path = str(dest.relative_to(project_root))
+            record_file_version(project_root, relative_path, dest)
             click.echo(f"  Copied {cmd_file.name}")
