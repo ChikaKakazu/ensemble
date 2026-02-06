@@ -43,6 +43,13 @@ model: opus
 - 変更ファイル数 > 10 または 複数ブランチ必要
 - 例: 認証・API・UIの同時開発
 
+### パターンD: Agent Teams ハイブリッド（実験的）
+- パターンBの代替（`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` 設定時）
+- Claude Code公式のTeamCreate/SendMessageを使用
+- Ensembleの計画・レビュー・改善層は維持
+- 通信・実行層のみAgent Teamsで置き換え
+- 詳細は `.claude/rules/agent-teams.md` 参照
+
 ## パターン別実行方法
 
 ### パターンA: 単一Worker実行
@@ -92,6 +99,26 @@ Dispatchに指示を送り、ワーカーペインを起動させる。
 2. type: start_worktree を指定
 3. Dispatchがworktree-create.shを実行
 ```
+
+### パターンD: Agent Teams ハイブリッド実行
+
+Claude Code公式のAgent Teams機能を使い、通信・実行層を置き換える。
+Ensembleの計画・レビュー・改善層はそのまま維持。
+
+```
+前提: CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 が設定されていること
+
+1. TeamCreate でチーム作成
+2. 各ワーカーをteammateとしてspawn
+3. TaskCreate/SendMessage でタスク配信
+4. idle通知で完了検知
+5. TeamDelete でクリーンアップ
+6. レビュー・改善は従来通り
+```
+
+### Agent Teams フォールバック
+
+問題発生時はパターンBにフォールバック。
 
 ## コスト意識のワークフロー選択
 

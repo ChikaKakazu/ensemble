@@ -43,6 +43,13 @@ model: opus
 - 変更ファイル数 > 10 または 複数ブランチ必要
 - 例: 認証・API・UIの同時開発
 
+### パターンD: Agent Teams ハイブリッド（実験的）
+- パターンBの代替（`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` 設定時）
+- Claude Code公式のTeamCreate/SendMessageを使用
+- Ensembleの計画・レビュー・改善層は維持
+- 通信・実行層のみAgent Teamsで置き換え
+- 詳細は `.claude/rules/agent-teams.md` 参照
+
 ## パターン別実行方法
 
 ### パターンA: 単一Worker実行
@@ -92,6 +99,40 @@ Dispatchに指示を送り、ワーカーペインを起動させる。
 2. type: start_worktree を指定
 3. Dispatchがworktree-create.shを実行
 ```
+
+### パターンD: Agent Teams ハイブリッド実行
+
+Claude Code公式のAgent Teams機能を使い、通信・実行層を置き換える。
+Ensembleの計画・レビュー・改善層はそのまま維持。
+
+```
+前提: CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 が設定されていること
+
+1. TeamCreate でチーム作成:
+   {"team_name": "ensemble-{task-id}", "description": "..."}
+
+2. 各ワーカーをteammateとしてspawn（Task tool使用）:
+   - subagent_type に応じたツール制限を設定
+   - .claude/agents/worker.md をベースにしたプロンプト
+
+3. TaskCreate で各タスクを登録
+
+4. SendMessage でワーカーに直接指示:
+   {"type": "message", "recipient": "worker-1", "content": "..."}
+
+5. ワーカー完了通知は自動配信（idle通知で検知）
+
+6. 全タスク完了後、TeamDelete でクリーンアップ
+
+7. レビュー・改善フェーズは従来通り
+```
+
+### Agent Teams フォールバック
+
+Agent Teams利用中に問題が発生した場合:
+1. TeamDelete で現在のチームをクリーンアップ
+2. パターンBにフォールバック（Dispatch + Workers）
+3. 中断したタスクを従来方式で再実行
 
 ## コスト意識のワークフロー選択
 

@@ -206,7 +206,7 @@ Dispatchは以下の場合に行動を開始する:
 ## dispatch-instruction.yaml フォーマット
 
 ```yaml
-type: start_workers  # or start_worktree
+type: start_workers  # or start_worktree or start_agent_teams
 worker_count: 2
 tasks:
   - id: task-001
@@ -217,8 +217,32 @@ tasks:
     files: ["file3.py"]
 created_at: "2026-02-03T10:00:00Z"
 workflow: default
-pattern: B
+pattern: B  # B: tmux並列, C: worktree, D: Agent Teams
 ```
+
+## パターンD（Agent Teams）の場合
+
+`pattern: D` の指示を受けた場合、Dispatchは以下を実行:
+
+1. **従来のpane-setup.shは実行しない**
+2. **Conductorに委譲**: Agent TeamsはConductorが直接制御する
+3. Dispatchの役割はダッシュボード更新と完了報告の集約のみ
+
+```
+pattern D のフロー:
+  Conductor → TeamCreate/SendMessage で直接ワーカー制御
+  Dispatch  → dashboard.md更新 + completion-summary.yaml作成のみ
+```
+
+### Dispatchが行うこと（パターンD）
+- status/dashboard.md の更新（タスク状態の反映）
+- queue/reports/completion-summary.yaml の作成（全タスク完了時）
+- Conductorへの完了通知
+
+### Dispatchが行わないこと（パターンD）
+- pane-setup.sh の実行（不要）
+- send-keysによるワーカー通知（Agent Teamsが自動で行う）
+- ACKファイルの待機（Agent Teamsのidle通知で代替）
 
 ## ウィンドウ・ペイン構成
 

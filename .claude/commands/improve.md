@@ -1,7 +1,7 @@
 ---
 description: |
   自己改善を手動実行する。learnerエージェントを呼び出し、
-  直近のタスク実行を分析してLEARNED.md更新提案を生成する。
+  直近のタスク実行を分析してMEMORY.md更新提案を生成する。
 ---
 
 learnerエージェントとして自己改善分析を実行してください。
@@ -47,7 +47,7 @@ $ARGUMENTS
    - `skill-candidates.md`: スキル化候補
    - `decisions.md`: 判断ログ（存在しない場合のみ）
 
-### Step 4: LEARNED.md更新提案の生成
+### Step 4: MEMORY.md更新提案の生成
 
 以下の場合に提案を生成:
 
@@ -84,11 +84,11 @@ $ARGUMENTS
 |---------|------|--------|
 | ... | ... | YES/NO |
 
-### LEARNED.md更新提案
+### MEMORY.md更新提案
 （提案がある場合のみ表示）
 
 ```markdown
-## 学習済みルール（自動追記）
+## 学習済みルール
 - {提案されるルール}
 ```
 
@@ -101,16 +101,28 @@ $ARGUMENTS
 
 ## 更新の適用
 
-ユーザーが承認した場合のみ、LEARNED.mdの「学習済みルール」セクションに追記する。
+ユーザーが承認した場合のみ、`MEMORY.md` に追記する。
+MEMORY.mdはClaude Code公式の自動メモリ機能で、毎ターン自動的にシステムプロンプトに注入される。
 
 ```bash
-# 追記場所の確認
-grep -n "学習済みルール" LEARNED.md
+# MEMORY.mdの存在確認と追記
+if [ -f MEMORY.md ]; then
+  echo "" >> MEMORY.md
+  echo "## {日付}: {ルール名}" >> MEMORY.md
+  echo "- {新しいルール}" >> MEMORY.md
+else
+  echo "# Ensemble Learning Memory" > MEMORY.md
+  echo "" >> MEMORY.md
+  echo "## {日付}: {ルール名}" >> MEMORY.md
+  echo "- {新しいルール}" >> MEMORY.md
+fi
 ```
 
 ## 注意事項
 
-- 提案のみ行い、承認なしにLEARNED.mdを変更しない
+- 提案のみ行い、承認なしにMEMORY.mdを変更しない
 - 事実に基づいた分析を行う（主観を入れない）
 - 学習ノートは削除せず累積する
 - 過去のノートを参照して傾向分析も行う
+- MEMORY.mdは200行以内に保つ（Claude Codeの制限）
+- 詳細は `memory/` ディレクトリにトピック別ファイルとして保存

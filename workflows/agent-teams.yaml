@@ -1,0 +1,94 @@
+# Agent Teams Hybrid Workflow
+# パターンD: Claude Code公式Agent Teams + Ensemble計画・レビュー層
+#
+# 前提条件:
+#   CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 が設定されていること
+#
+# 特徴:
+#   - 通信はSendMessage（自動配信）
+#   - タスク管理はTaskCreate/TaskList/TaskUpdate
+#   - 計画・レビュー・改善はEnsemble独自
+#   - 従来のpane-setup.sh / send-keys不要
+
+name: agent-teams
+description: "Agent Teams ハイブリッドワークフロー（実験的）"
+cost_level: medium
+pattern: D
+
+# フェーズ定義
+phases:
+  # Phase 1: 計画（Ensemble独自）
+  plan:
+    agent: conductor
+    model: opus
+    actions:
+      - analyze_task
+      - decompose_subtasks
+      - select_workflow
+      - user_approval
+
+  # Phase 2: チーム作成 & タスク配信（Agent Teams）
+  execute:
+    method: agent_teams  # 従来は tmux_parallel or worktree
+    actions:
+      - team_create:
+          team_name: "ensemble-{task_id}"
+          description: "{task_description}"
+      - spawn_teammates:
+          # ワーカーを.claude/agents/worker.mdベースでspawn
+          base_agent: worker
+          count: "{worker_count}"
+      - task_create:
+          # 各サブタスクをTaskListに登録
+          tasks: "{subtasks}"
+      - assign_tasks:
+          # SendMessageで各ワーカーに指示
+          method: send_message
+      - wait_completion:
+          # idle通知 + TaskList監視で完了検知
+          method: task_list_poll
+          timeout: 1800  # 30分
+
+  # Phase 3: レビュー（Ensemble独自）
+  review:
+    parallel:
+      - agent: reviewer
+        model: sonnet
+        focus: architecture
+      - agent: security-reviewer
+        model: sonnet
+        focus: security
+    merge_strategy: all_approved
+
+  # Phase 4: 修正ループ（必要な場合）
+  fix_loop:
+    max_iterations: 3
+    trigger: any_needs_fix
+    actions:
+      - send_fix_instructions  # SendMessageで修正指示
+      - wait_fix_completion
+      - re_review
+
+  # Phase 5: クリーンアップ
+  cleanup:
+    actions:
+      - team_delete
+      - dashboard_update
+      - completion_report
+
+  # Phase 6: 自己改善（Ensemble独自）
+  improve:
+    agent: learner
+    model: sonnet
+    actions:
+      - analyze_execution
+      - detect_issues
+      - propose_memory_update  # MEMORY.md更新提案
+
+# フォールバック設定
+fallback:
+  on_error: pattern_b  # Agent Teams障害時はパターンBにフォールバック
+  conditions:
+    - agent_teams_unavailable
+    - team_create_failed
+    - timeout_exceeded

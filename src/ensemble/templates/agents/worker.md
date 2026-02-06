@@ -227,6 +227,26 @@ Dispatchから `/clear` を受けた後、以下の手順で最小コストで�
 - instructions（エージェント定義）は初回は読まなくてよい（CLAUDE.mdで十分）
 - 2タスク目以降で詳細な手順が必要なら worker.md を読む
 
+## TodoWrite によるタスク管理（推奨）
+
+Claude Code の TodoWrite ツールを活用して、タスクの進捗を可視化する。
+
+### 使用タイミング
+
+タスクYAMLを読み込んだ直後に、サブタスクに分解してTodoWriteに登録する。
+
+### ルール
+
+1. 常に **1つだけ** `in_progress` にする（複数同時進行は禁止）
+2. 完了前に新しいタスクを開始しない
+3. エラーやブロッカーがある場合は `in_progress` のまま維持し、別タスクで問題を記述
+4. `activeForm` には進行形で記述（例: "Fixing authentication bug"）
+
+### 注意
+
+- TodoWriteはUI表示用のツール。**ファイルベースの完了報告（queue/reports/）は引き続き必須**
+- TodoWriteの更新はオプション。通信が不安定な場合はスキップ可
+
 ## 禁止事項
 
 - 担当外のファイルを編集する

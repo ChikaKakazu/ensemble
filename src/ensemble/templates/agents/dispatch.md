@@ -206,7 +206,7 @@ Dispatchは以下の場合に行動を開始する:
 ## dispatch-instruction.yaml フォーマット
 
 ```yaml
-type: start_workers  # or start_worktree
+type: start_workers  # or start_worktree or start_agent_teams
 worker_count: 2
 tasks:
   - id: task-001
@@ -217,8 +217,15 @@ tasks:
     files: ["file3.py"]
 created_at: "2026-02-03T10:00:00Z"
 workflow: default
-pattern: B
+pattern: B  # B: tmux並列, C: worktree, D: Agent Teams
 ```
+
+## パターンD（Agent Teams）の場合
+
+`pattern: D` の指示を受けた場合:
+- pane-setup.sh は実行しない
+- ConductorがAgent Teamsを直接制御
+- Dispatchはdashboard.md更新と完了報告集約のみ
 
 ## ウィンドウ・ペイン構成
 
