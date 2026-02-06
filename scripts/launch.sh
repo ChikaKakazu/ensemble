@@ -77,19 +77,18 @@ echo "  Conductor pane: $CONDUCTOR_PANE"
 DASHBOARD_PANE=$(tmux split-window -h -t "$CONDUCTOR_PANE" -c "$PROJECT_DIR" -l 40% -P -F '#{pane_id}')
 echo "  Dashboard pane: $DASHBOARD_PANE"
 
+# シェルの初期化を待つ
+sleep 2
+
 # conductor (--agent でエージェント定義をロード)
 echo "Starting Conductor (Opus, no thinking)..."
 tmux send-keys -t "$CONDUCTOR_PANE" \
-    "MAX_THINKING_TOKENS=0 claude --agent conductor --model opus --dangerously-skip-permissions"
-sleep 1
-tmux send-keys -t "$CONDUCTOR_PANE" Enter
+    "MAX_THINKING_TOKENS=0 claude --agent conductor --model opus --dangerously-skip-permissions" C-m
 
 # dashboard (less +F for live following, Ctrl+C to pause, F to resume)
 echo "Starting Dashboard monitor (in conductor session)..."
 tmux send-keys -t "$DASHBOARD_PANE" \
-    "less +F .ensemble/status/dashboard.md"
-sleep 1
-tmux send-keys -t "$DASHBOARD_PANE" Enter
+    "less +F .ensemble/status/dashboard.md" C-m
 
 # conductorペインを選択
 tmux select-pane -t "$CONDUCTOR_PANE"
@@ -114,21 +113,20 @@ echo "  Worker area pane: $WORKER_AREA_PANE"
 # DISPATCH_PANE: dispatch (左、フルハイト)
 # WORKER_AREA_PANE: ワーカー用プレースホルダー (右、フルハイト)
 
+# シェルの初期化を待つ
+sleep 2
+
 # dispatch (--agent でエージェント定義をロード)
 echo "Starting Dispatch (Sonnet)..."
 tmux send-keys -t "$DISPATCH_PANE" \
-    "claude --agent dispatch --model sonnet --dangerously-skip-permissions"
-sleep 1
-tmux send-keys -t "$DISPATCH_PANE" Enter
+    "claude --agent dispatch --model sonnet --dangerously-skip-permissions" C-m
 
 # フレンドリーファイア防止
 sleep 3
 
 # 右側のプレースホルダーにメッセージ表示
 tmux send-keys -t "$WORKER_AREA_PANE" \
-    "echo '=== Worker Area ===' && echo 'Run: ./scripts/pane-setup.sh [count]' && echo 'to add workers here.'"
-sleep 1
-tmux send-keys -t "$WORKER_AREA_PANE" Enter
+    "echo '=== Worker Area ===' && echo 'Run: ./scripts/pane-setup.sh [count]' && echo 'to add workers here.'" C-m
 
 # dispatchペインを選択
 tmux select-pane -t "$DISPATCH_PANE"
