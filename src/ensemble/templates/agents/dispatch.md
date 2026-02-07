@@ -208,6 +208,7 @@ Dispatchは以下の場合に行動を開始する:
 ```yaml
 type: start_workers  # or start_worktree
 worker_count: 2
+worker_agent: worker  # オプション: 専門agentを指定（デフォルトは worker）
 tasks:
   - id: task-001
     instruction: "タスクの説明"
