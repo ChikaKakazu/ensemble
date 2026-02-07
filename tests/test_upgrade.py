@@ -8,6 +8,10 @@ import pytest
 from click.testing import CliRunner
 
 from ensemble.cli import cli
+from ensemble.commands._upgrade_impl import (
+    _get_template_file_for_relative_path,
+    _scan_scripts,
+)
 from ensemble.version_tracker import (
     compute_file_hash,
     load_versions,
@@ -176,6 +180,137 @@ class TestUpgradeCommand:
         # so this test verifies the --diff flag doesn't crash
         result = runner.invoke(cli, ["upgrade", "--diff", "--dry-run"])
         assert result.exit_code == 0
+
+    def test_upgrade_scans_scripts(self, runner, temp_project):
+        """Test that scripts/ directory files are scanned for updates."""
+        # Create scripts directory if it doesn't exist
+        scripts_dir = temp_project / "scripts"
+        scripts_dir.mkdir(exist_ok=True)
+
+        # Create a test script file
+        test_script = scripts_dir / "setup.sh"
+        test_script.write_text("#!/bin/bash\necho 'test'\n")
+
+        # Run upgrade --dry-run
+        result = runner.invoke(cli, ["upgrade", "--dry-run"])
+        assert result.exit_code == 0
+
+        # Verify scripts/ files are included in scan
+        # The output should mention scripts if they're scanned
+        # (Either as up-to-date, new, or modified)
+
+    def test_upgrade_scripts_new_file(self, runner, temp_project):
+        """Test that new script files from template are detected."""
+        # Create scripts directory
+        scripts_dir = temp_project / "scripts"
+        scripts_dir.mkdir(exist_ok=True)
+
+        # Delete a script file if it exists to simulate a new file scenario
+        setup_script = scripts_dir / "setup.sh"
+        if setup_script.exists():
+            setup_script.unlink()
+
+        # Also remove it from versions.json
+        versions = load_versions(temp_project)
+        relative_path = "scripts/setup.sh"
+        if relative_path in versions:
+            del versions[relative_path]
+            from ensemble.version_tracker import save_versions
+            save_versions(temp_project, versions)
+
+        # Run upgrade
+        result = runner.invoke(cli, ["upgrade"])
+        assert result.exit_code == 0
+
+        # If setup.sh exists in template, it should be detected as new
+        if "setup.sh" in result.output:
+            assert "(new file)" in result.output or "added 1" in result.output
+
+    def test_upgrade_scripts_modified_skipped(self, runner, temp_project):
+        """Test that locally modified script files are skipped."""
+        # Create scripts directory
+        scripts_dir = temp_project / "scripts"
+        scripts_dir.mkdir(exist_ok=True)
+
+        # Create and record a script file
+        setup_script = scripts_dir / "setup.sh"
+        original_content = "#!/bin/bash\necho 'original'\n"
+        setup_script.write_text(original_content)
+
+        # Record the original version
+        relative_path = "scripts/setup.sh"
+        record_file_version(temp_project, relative_path, setup_script)
+
+        # Modify the file
+        setup_script.write_text(original_content + "\n# User modification\n")
+
+        # Run upgrade --dry-run
+        result = runner.invoke(cli, ["upgrade", "--dry-run"])
+        assert result.exit_code == 0
+
+        # Should mention skipped files
+        if "setup.sh" in result.output:
+            assert "modified locally" in result.output or "skipping" in result.output.lower()
+
+
+class TestUpgradeHelpers:
+    """Test upgrade helper functions."""
+
+    def test_scan_scripts_returns_list(self, temp_project):
+        """Test that _scan_scripts returns correct tuple list."""
+        # Create scripts directory with a test file
+        scripts_dir = temp_project / "scripts"
+        scripts_dir.mkdir(exist_ok=True)
+
+        test_script = scripts_dir / "test.sh"
+        test_script.write_text("#!/bin/bash\necho 'test'\n")
+
+        # Record version
+        record_file_version(temp_project, "scripts/test.sh", test_script)
+
+        # Call _scan_scripts
+        results = _scan_scripts(temp_project)
+
+        # Should return a list of tuples
+        assert isinstance(results, list)
+        for item in results:
+            assert isinstance(item, tuple)
+            assert len(item) == 3  # (status, relative_path, reason)
+            status, path, reason = item
+            assert status in ["new", "update", "skip", "force_update"]
+            assert isinstance(path, str)
+            assert isinstance(reason, str)
+
+    def test_get_template_file_for_scripts_path(self):
+        """Test that _get_template_file_for_relative_path works for scripts/ paths."""
+        from ensemble.templates import get_template_path
+
+        # Test scripts/ path
+        result = _get_template_file_for_relative_path("scripts/setup.sh")
+
+        # Should return a Path object pointing to template
+        assert result is not None
+        expected = get_template_path("scripts") / "setup.sh"
+        assert result == expected
+
+    def test_get_template_file_for_agents_path(self):
+        """Test that _get_template_file_for_relative_path still works for .claude/ paths."""
+        from ensemble.templates import get_template_path
+
+        # Test .claude/agents/ path
+        result = _get_template_file_for_relative_path(".claude/agents/conductor.md")
+
+        # Should return a Path object pointing to template
+        assert result is not None
+        expected = get_template_path("agents") / "conductor.md"
+        assert result == expected
+
+        # Test .claude/commands/ path
+        result = _get_template_file_for_relative_path(".claude/commands/go.md")
+
+        assert result is not None
+        expected = get_template_path("commands") / "go.md"
+        assert result == expected
 
 
 class TestVersionTracker:

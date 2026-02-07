@@ -125,6 +125,49 @@ class TestInitCommand:
         for agent in expected_agents:
             assert (agents_dir / agent).exists(), f"Missing {agent}"
 
+    def test_init_full_copies_commands(self, runner, temp_project):
+        """Test that init --full copies command files."""
+        result = runner.invoke(cli, ["init", "--full"])
+        assert result.exit_code == 0
+
+        commands_dir = temp_project / ".claude" / "commands"
+        assert commands_dir.exists()
+
+        # Check some expected command files
+        expected_commands = ["go.md", "go-light.md", "improve.md"]
+        for cmd in expected_commands:
+            assert (commands_dir / cmd).exists(), f"Missing {cmd}"
+
+        # Check new commands if they exist in templates
+        new_commands = ["create-skill.md", "create-agent.md"]
+        for cmd in new_commands:
+            cmd_file = commands_dir / cmd
+            # These may or may not exist depending on template version
+            # Just check if they exist, don't fail if they don't
+            if cmd_file.exists():
+                assert cmd_file.read_text(), f"{cmd} is empty"
+
+    def test_init_idempotent(self, runner, temp_project):
+        """Test that running init twice doesn't overwrite existing files."""
+        # First init
+        result = runner.invoke(cli, ["init", "--full"])
+        assert result.exit_code == 0
+
+        # Modify a file
+        conductor = temp_project / ".claude" / "agents" / "conductor.md"
+        original_content = conductor.read_text()
+        modified_content = original_content + "\n# MODIFIED\n"
+        conductor.write_text(modified_content)
+
+        # Second init (without --force)
+        result = runner.invoke(cli, ["init", "--full"])
+        assert result.exit_code == 0
+
+        # File should not be overwritten
+        content = conductor.read_text()
+        assert "# MODIFIED" in content
+        assert content == modified_content
+
 
 class TestLaunchCommand:
     """Test ensemble launch command."""
