@@ -16,11 +16,20 @@ Ensemble is an AI orchestration system that combines the best practices from:
 - **Autonomous AI Coordination**: One instruction triggers multiple AI agents working together
 - **Flexible Execution Patterns**:
   - Pattern A: Simple tasks via subagent
-  - Pattern B: Medium tasks via tmux parallel panes
+  - Pattern B: Medium tasks via tmux parallel panes (2-4 workers, auto-scaled)
   - Pattern C: Large tasks via git worktree separation
+- **Parallel Execution Enhancements**:
+  - Dynamic worker count (auto-scales based on task count)
+  - Worker-level subagent parallelization (for 3+ files)
 - **Parallel Review**: Architecture + Security reviews run in parallel
 - **Self-Improvement**: Automatic learning and CLAUDE.md updates
+  - Categorized learning (communication, workflow, code quality, tools)
+  - Duplicate detection and consolidation
+  - Subagent execution result collection
 - **Compaction Recovery**: Built-in protocol to prevent role amnesia
+- **Extensibility**:
+  - `/create-skill` - Generate project-specific skill templates
+  - `/create-agent` - Auto-generate specialized agents from tech stack
 
 ## Installation
 
@@ -70,6 +79,10 @@ tmux attach -t ensemble-workers
 
 # Light workflow (minimal cost)
 /go-light fix typo in README
+
+# Create project-specific tools
+/create-skill my-feature "Description of the skill"
+/create-agent  # Interactive tech stack analysis
 ```
 
 ### CLI Commands
@@ -80,7 +93,19 @@ tmux attach -t ensemble-workers
 | `ensemble init --full` | Also copy agent/command definitions locally |
 | `ensemble launch` | Start 2 tmux sessions (conductor + workers) |
 | `ensemble launch --no-attach` | Start sessions without attaching |
+| `ensemble upgrade` | Sync template updates (agents, commands, scripts) |
 | `ensemble --version` | Show version |
+
+### In-Session Commands (Conductor)
+
+| Command | Description |
+|---------|-------------|
+| `/go <task>` | Full workflow with auto-pattern detection |
+| `/go-light <task>` | Lightweight workflow for simple changes |
+| `/create-skill <name> <desc>` | Generate project-specific skill template |
+| `/create-agent` | Auto-generate specialized agent from tech stack |
+| `/improve` | Manual self-improvement analysis |
+| `/status` | View current progress |
 
 ## Requirements
 

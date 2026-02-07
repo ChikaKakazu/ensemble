@@ -208,6 +208,7 @@ Dispatchは以下の場合に行動を開始する:
 ```yaml
 type: start_workers  # or start_worktree
 worker_count: 2
+worker_agent: worker  # オプション: 専門agentを指定（デフォルトは worker）
 tasks:
   - id: task-001
     instruction: "タスクの説明"
@@ -218,6 +219,22 @@ tasks:
 created_at: "2026-02-03T10:00:00Z"
 workflow: default
 pattern: B
+```
+
+### worker_agent フィールド（オプション）
+
+create-agentで生成した専門agent（frontend-specialist等）をWorkerとして使う場合に指定:
+
+- **未指定時**: デフォルトの `worker` agent を使用
+- **指定時**: `WORKER_AGENT=<agent名>` を環境変数として pane-setup.sh に渡す
+
+**pane-setup.sh呼び出し時の指定方法:**
+```bash
+# worker_agentが指定されている場合
+WORKER_AGENT="${worker_agent}" ./scripts/pane-setup.sh ${worker_count}
+
+# worker_agentが未指定の場合（デフォルト）
+./scripts/pane-setup.sh ${worker_count}
 ```
 
 ## ウィンドウ・ペイン構成

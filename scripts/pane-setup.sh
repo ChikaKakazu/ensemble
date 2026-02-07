@@ -107,10 +107,12 @@ for i in $(seq 1 "$WORKER_COUNT"); do
     echo "  Worker-$i pane: $NEW_PANE"
     WORKER_PANES+=("$NEW_PANE")
 
-    # WORKER_ID環境変数を設定して、--agent workerでClaudeを起動
+    # WORKER_ID環境変数を設定して、--agentでClaudeを起動
+    # WORKER_AGENT環境変数が設定されていればそれを使用、なければ worker をデフォルト
     # 重要: send-keysは2回分割で送信（shogunパターン）
+    AGENT_NAME="${WORKER_AGENT:-worker}"
     tmux send-keys -t "$NEW_PANE" \
-        "export WORKER_ID=$i && claude --agent worker --dangerously-skip-permissions"
+        "export WORKER_ID=$i && claude --agent $AGENT_NAME --dangerously-skip-permissions"
     sleep 1
     tmux send-keys -t "$NEW_PANE" Enter
 
