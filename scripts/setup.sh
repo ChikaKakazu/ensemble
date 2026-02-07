@@ -126,7 +126,24 @@ cat > status/dashboard.md << 'EOF'
 *Last updated: -*
 EOF
 
-# 5. Create .gitignore additions
+# 5. Copy command files
+echo "Copying command files..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TEMPLATE_DIR="$SCRIPT_DIR/../src/ensemble/templates"
+
+# コマンドファイルのコピー（テンプレートから。存在しない場合のみ）
+for cmd_file in go.md go-light.md go-issue.md improve.md review.md status.md create-skill.md create-agent.md; do
+    if [ ! -f ".claude/commands/$cmd_file" ]; then
+        if [ -f "$TEMPLATE_DIR/commands/$cmd_file" ]; then
+            cp "$TEMPLATE_DIR/commands/$cmd_file" ".claude/commands/$cmd_file"
+            echo "  Copied $cmd_file"
+        fi
+    else
+        echo "  $cmd_file already exists, skipping..."
+    fi
+done
+
+# 6. Create .gitignore additions
 if [ -f .gitignore ]; then
     if ! grep -q "queue/tasks/" .gitignore 2>/dev/null; then
         echo "" >> .gitignore
