@@ -84,7 +84,11 @@ your-project/
         ├── go-light.md
         ├── status.md
         ├── review.md
-        └── improve.md
+        ├── improve.md
+        ├── go-issue.md
+        ├── create-skill.md
+        ├── create-agent.md
+        └── deploy.md
 ```
 
 ## コマンド一覧
@@ -99,6 +103,7 @@ your-project/
 | `ensemble launch` | 2つのtmuxセッションを起動してアタッチ |
 | `ensemble launch --session NAME` | セッション名のベースを指定（NAME-conductor, NAME-workers） |
 | `ensemble launch --no-attach` | セッションを起動するがアタッチしない |
+| `ensemble upgrade` | テンプレートの更新を同期（agents, commands, scripts） |
 | `ensemble --version` | バージョンを表示 |
 | `ensemble --help` | ヘルプを表示 |
 
@@ -151,6 +156,40 @@ your-project/
 ```bash
 /improve                   # 直近のタスクを分析
 /improve task-001          # 指定タスクを分析
+```
+
+### `/go-issue [番号]` - Issue駆動開発
+
+GitHub Issueから実装を開始。
+
+```bash
+/go-issue                  # Issue一覧から選択
+/go-issue 123              # Issue #123を直接指定
+```
+
+### `/create-skill <name> <desc>` - Skill生成
+
+プロジェクト固有のskillテンプレートを生成。
+
+```bash
+/create-skill my-skill "説明文"
+/create-skill frontend-optimizer "Reactコンポーネントのパフォーマンス最適化"
+```
+
+### `/create-agent` - 専門Agent生成
+
+技術スタックに応じた専門agentを自動生成。
+
+```bash
+/create-agent              # 対話形式で専門agentを作成
+```
+
+### `/deploy` - デプロイ自動化
+
+バージョンアップ・PyPI公開を自動実行。
+
+```bash
+/deploy                    # バージョンアップ・マージ・公開を一括実行
 ```
 
 ## 実行パターン
