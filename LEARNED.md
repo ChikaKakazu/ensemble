@@ -27,6 +27,13 @@
 - Claude Max 5並列制限: Conductor用1 + Worker用最大4
 - タスク数 ≤ 2 → worker_count: 2, タスク数3 → 3, タスク数4以上 → 4
 
+### 2025-02-08: 機能追加時のドキュメント同期ルール
+- 新コマンド/機能を追加した際は、以下3ファイルを必ず同時更新すること:
+  1. USAGE.md（日本語、詳細な使用例）
+  2. README.md（英語、コマンド一覧テーブル）
+  3. docs/ARCHITECTURE.md（日本語、技術詳細）
+- 特にCLIコマンド一覧とSkillコマンド一覧のテーブルを確認
+
 ## コード品質
 
 （該当ルールなし）
@@ -42,3 +49,8 @@
 - `ensemble upgrade` 実行時、scripts/ 配下のローカルファイルもテンプレートと同期確認が必要
 - 特にpane-setup.sh: セッション名変数（CONDUCTOR_SESSION/WORKERS_SESSION）を使用すべき
 - テンプレート版（src/ensemble/templates/scripts/）が正、ローカル版（scripts/）が従の原則
+
+### 2025-02-08: ダッシュボード監視にはwatchを使用
+- `less +F` はファイル末尾への追記のみ検知。全体上書き（truncate+write）は反映されない
+- `watch -n 5 -t cat <file>` で5秒間隔の全体再読込を使用すること
+- ファイル監視ツール選択時は更新パターン（追記 vs 上書き）を確認すること

@@ -40,6 +40,34 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/scripts/notify-stop.sh",
+            "statusMessage": "作業完了通知",
+            "timeout": 3000
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/scripts/notify-error.sh",
+            "statusMessage": "エラー通知",
+            "timeout": 3000
+          }
+        ]
+      }
     ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash scripts/statusline.sh"
   }
 }
