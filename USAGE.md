@@ -192,6 +192,30 @@ GitHub Issueから実装を開始。
 /deploy                    # バージョンアップ・マージ・公開を一括実行
 ```
 
+### `/rpi-research <タスク>` - RPI Research
+
+要件解析・技術調査・実現可能性評価を行う。
+
+```bash
+/rpi-research ユーザー認証機能を追加  # 調査フェーズ
+```
+
+### `/rpi-plan` - RPI Plan
+
+詳細計画策定（アーキテクチャ設計、タスク分解）を行う。
+
+```bash
+/rpi-plan                  # 計画フェーズ
+```
+
+### `/rpi-implement` - RPI Implement
+
+計画に基づく実装を開始（`/go`に連携）。
+
+```bash
+/rpi-implement             # 実装フェーズ
+```
+
 ## 実行パターン
 
 Conductorがタスク規模に応じて自動選択します。
@@ -300,6 +324,26 @@ ensemble launch
 # → 承認すると学習済みルールに追記
 ```
 
+### 6. RPI Workflow（大規模機能開発向け）
+
+Research → Plan → Implement の段階的ワークフロー:
+
+```bash
+# 1. 調査フェーズ
+/rpi-research OAuth2認証機能を追加
+# → 実現可能性、技術選定、リスク評価を実施
+# → GO/NO-GO判定を確認
+
+# 2. 計画フェーズ
+/rpi-plan
+# → 詳細なアーキテクチャ設計
+# → タスク分解と実装計画
+
+# 3. 実装フェーズ
+/rpi-implement
+# → 計画に基づき /go で実装開始
+```
+
 ## tmuxセッションの構成
 
 `ensemble launch` で起動されるセッション（**2つの独立したセッション**）:
@@ -373,6 +417,39 @@ tmux attach -t ensemble-workers
 **Workersセッション（左60% : 右40%）**:
 - **Dispatch**: タスク配信エージェント（Sonnetモデル）
 - **Worker Area**: ワーカー用（`./scripts/pane-setup.sh` で追加、最大4名）
+
+## 新機能（v0.4.9+）
+
+### Hooks通知
+
+エージェント作業完了時・エラー発生時にターミナルベルで通知します。
+
+- **Stop hook**: エージェント作業完了時に音声通知
+- **PostToolUseFailure hook**: エラー発生時に音声通知（2回）
+- 複数ペイン監視の認知負荷を軽減
+
+設定: `.claude/settings.json` の `hooks.Stop`, `hooks.PostToolUseFailure`
+
+### Status Line
+
+Conductorペインに現在の状態を常時表示します。
+
+- gitブランチ
+- セッション状態（Conductor, Workers）
+- Worker数
+
+出力例: `⎇ main | C:✓ W:✓ | Workers: 2`
+
+設定: `.claude/settings.json` の `statusLine`
+
+### CLAUDE.md行数チェック
+
+CLAUDE.mdが150行を超えると警告します（Claude Code Best Practiceに基づく）。
+
+- pre-commit hook: コミット時に自動チェック
+- hookify: `.claude/hooks/scripts/check-claude-md-lines.sh`
+
+詳細なルールは `.claude/rules/` に分割することを推奨。
 
 ## 注意事項
 
