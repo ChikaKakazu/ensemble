@@ -30,6 +30,10 @@ Ensemble is an AI orchestration system that combines the best practices from:
 - **Extensibility**:
   - `/create-skill` - Generate project-specific skill templates
   - `/create-agent` - Auto-generate specialized agents from tech stack
+- **RPI Workflow**: Research → Plan → Implement staged workflow for large features
+- **Hooks Notification**: Terminal bell on agent completion (Stop) and errors (PostToolUseFailure)
+- **Status Line**: Real-time display of git branch, session state, worker count
+- **CLAUDE.md 150-line Limit Check**: Pre-commit hook to prevent instruction bloat
 
 ## Installation
 
@@ -103,6 +107,9 @@ tmux attach -t ensemble-workers
 | `/go <task>` | Full workflow with auto-pattern detection |
 | `/go-light <task>` | Lightweight workflow for simple changes |
 | `/go-issue [number]` | Start implementation from GitHub Issue |
+| `/rpi-research <task>` | Research phase: requirement analysis, technical investigation, feasibility assessment |
+| `/rpi-plan` | Plan phase: detailed planning, architecture design, task breakdown |
+| `/rpi-implement` | Implement phase: execute implementation based on plan (delegates to /go) |
 | `/create-skill <name> <desc>` | Generate project-specific skill template |
 | `/create-agent` | Auto-generate specialized agent from tech stack |
 | `/review` | Run architecture + security review |
