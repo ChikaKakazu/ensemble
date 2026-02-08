@@ -1,63 +1,118 @@
 # Ensemble Dashboard
 
 ## Current Status
-**✅ CLAUDE.md分割の影響修正完了**
+**✅ 全タスク完了（3/3成功）**
 
 ## 完了タスク
-| Task | Worker | Status | Details |
-|------|--------|--------|---------|
-| task-001 | worker-1 | ✅ completed | learner.md, improve.md, setup.sh 修正 |
-| task-002 | worker-2 | ✅ completed | テンプレート版3ファイル修正 |
+| Task | Worker | Status | Files Modified | Completed At |
+|------|--------|--------|---------------|--------------|
+| task-012 | worker-1 | ✅ success | 4 files | 18:05:00 |
+| task-013 | worker-2 | ✅ success | 3 files | 18:05:00 |
+| task-014 | worker-3 | ✅ success | 5 files | 18:05:00 |
 
-## 実装内容
+## 実装内容サマリー
 
-### Issue: CLAUDE.md分割による影響修正
+### task-012（Worker-1）✅
+**Hooks（音声通知）+ Status Line の実装**
 
-**背景:**
-- CLAUDE.md（284行）を分割し、.claude/rules/に移動
-- 学習済みルールをLEARNED.mdに分離
-- learner agentとimprove commandが追記先を見つけられなくなった
+**実施内容:**
+1. **Hooksスクリプト作成**
+   - notify-stop.sh: Stop hook用、ターミナルベル + 完了メッセージ
+   - notify-error.sh: PostToolUseFailure hook用、ベル（2回）+ エラーメッセージ
 
-**修正完了（6ファイル）:**
+2. **Status Lineスクリプト作成**
+   - statusline.sh: gitブランチ、セッション状態、Worker数を1行表示
+   - 出力例: "⎇ main | C:✓ W:✓ | Workers: 2"
 
-#### task-001（Worker-1）
-1. `.claude/agents/learner.md`（6箇所修正）
-   - 「CLAUDE.md更新提案」→「LEARNED.md更新提案」に変更
-   - 禁止事項「CLAUDE.mdを直接編集」→「LEARNED.mdを直接編集」に変更
-   - プロトコル内の参照も全て更新
+3. **.claude/settings.json更新**
+   - 既存設定（permissions, hooks.PreCompact, hooks.SessionStart）を保持
+   - hooks.Stop追加、hooks.PostToolUseFailure追加、statusLine追加
 
-2. `.claude/commands/improve.md`（6箇所修正）
-   - description: 「CLAUDE.md更新提案」→「LEARNED.md更新提案」
-   - Step 4のセクション名を更新
-   - Step 5の提案表示フォーマットを更新
-   - grepコマンドの対象をLEARNED.mdに変更
-   - 注意事項の参照を全て更新
+4. **権限設定**: 全スクリプトに実行権限付与、JSON構文検証OK
 
-3. `scripts/setup.sh`
-   - CLAUDE.md内の「学習済みルール（自動追記）」セクションを削除
-   - LEARNED.md作成処理を新規追加（3.5ステップ）
-   - LEARNED.mdのテンプレートを追加（説明コメント含む）
+**効果:**
+- エージェント作業完了時にターミナルベルで即座に通知
+- Conductorペインに常に状態が表示される
 
-#### task-002（Worker-2）
-1. `src/ensemble/templates/agents/learner.md`
-   - 「学習済みルール」セクションへの参照をLEARNED.mdに変更
-   - 追記先を明示
+### task-013（Worker-2）✅
+**CLAUDE.md 150行制限チェックの実装**
 
-2. `src/ensemble/templates/commands/improve.md`
-   - CLAUDE.md更新提案→LEARNED.md更新提案に変更
-   - LEARNED.md作成処理を追加
+**実施内容:**
+- pre-commit hook スクリプト (.githooks/check-claude-md.sh) を作成
+- hookify用スクリプト (.claude/hooks/scripts/check-claude-md-lines.sh) を作成
+- 両スクリプトに実行権限を付与
+- .claude/rules/workflow.md に150行制限のルールを追記
+- 動作確認テスト実施（CLAUDE.md現在34行、制限内で正常動作）
 
-3. `src/ensemble/templates/scripts/setup.sh`
-   - CLAUDE.mdから「学習済みルール」セクションを削除
-   - LEARNED.md作成処理を追加（ステップ4）
+**効果:**
+- CLAUDE.md肥大化を防ぎ、指示の守られやすさを維持
+- コミット時に自動チェック
 
-## 実行結果
-- ✅ 全6ファイル修正完了
-- ✅ learner agentとimprove commandが正しくLEARNED.mdに追記可能
-- ✅ エラーなし
+### task-014（Worker-3）✅
+**RPI Workflow部分導入**
 
-## 詳細報告
-queue/reports/completion-summary.yaml を参照
+**実施内容:**
+- /rpi-research: 要件解析・技術調査・実現可能性評価
+- /rpi-plan: 詳細計画策定（アーキテクチャ設計、タスク分解）
+- /rpi-implement: 計画に基づく実装（/goに連携）
+- rpiディレクトリ作成、.gitignore更新
+
+**効果:**
+- 大規模機能開発時の手戻りを防ぐ
+- Research→Plan→Implementの段階的実行
+
+## 修正ファイル合計: 12ファイル
+- Hooksスクリプト: 3ファイル
+- 設定ファイル: 1ファイル
+- CLAUDE.md制限チェック: 2ファイル
+- ルール追記: 1ファイル
+- RPIコマンド: 3ファイル
+- インフラ: 2ファイル
+
+## 主要改善
+1. **音声通知**: エージェント完了時にターミナルベルで即座に気づける
+2. **Status Line**: Conductorペインに常に状態表示（ブランチ、セッション、Worker数）
+3. **CLAUDE.md制限**: 150行超過時に自動警告、肥大化防止
+4. **RPIワークフロー**: 大規模タスクの段階的実行フレームワーク
+
+## 配信統計
+- 配信成功: 3/3 = **100%**
+- ACK受信: 3/3 = **100%**
+- タスク完了: 3/3 = **100%**
+- 再送回数: 1回（初回到達失敗、再送成功）
+
+## 実行パターン
+- パターン: B (parallel)
+- ワーカー数: 3
+- Workflow: default
+
+## エスカレーション解決
+**Issue**: pane-setup.sh バグ → ✅ 修正完了
+- Conductorによる修正実施
+- scripts/pane-setup.sh 3 の再実行成功
+- Worker 3台の起動完了
+
+## 次のステップ
+Conductor判断待ち（レビュー・改善フェーズの実施有無）
+
+**動作確認推奨事項:**
+- ensemble launchで起動し、Status Lineが表示されることを確認
+- Workerタスク完了時にターミナルベルが鳴ることを確認
+- CLAUDE.mdを編集してコミット時に150行チェックが動作することを確認
 
 ---
-*Last updated: 2025-02-05T21:58:00+09:00*
+
+## 過去の完了タスク（task-009～task-011）
+| Task | Worker | Status | Files Modified | Completed At |
+|------|--------|--------|---------------|--------------|
+| task-009 | worker-1 | ✅ success | 3 files | 17:13:00 |
+| task-010 | worker-1 | ✅ success | 2 files | 17:23:00 |
+| task-011 | worker-1 | ✅ success | 1 file | 17:42:00 |
+
+---
+
+## 詳細報告
+`queue/reports/completion-summary.yaml` を参照
+
+---
+*Last updated: 2025-02-08T18:07:00+09:00*

@@ -28,3 +28,8 @@ venv/
 .idea/
 .vscode/
 *.swp
+
+# RPI workflow outputs (project-specific)
+rpi/research-*.md
+rpi/plan-*.md
+rpi/implement-*.md
