@@ -307,6 +307,7 @@ queue/
 ```yaml
 type: start_workers  # or start_worktree
 worker_count: 2
+worker_agent: worker  # デフォルト。create-agentで生成した専門agentも指定可能
 tasks:
   - id: task-001
     instruction: "タスクの説明"
@@ -477,6 +478,7 @@ tmux send-keys -t "$WORKER_1_PANE" Enter
 |---------|------|
 | `ensemble init` | プロジェクトをEnsemble用に初期化 |
 | `ensemble launch` | 2つのtmuxセッションを起動 |
+| `ensemble upgrade` | テンプレートの更新を同期（agents, commands, scripts） |
 
 ### 8.2 Skillコマンド（Claude内で使用）
 
@@ -488,9 +490,12 @@ tmux send-keys -t "$WORKER_1_PANE" Enter
 | `/go --worktree タスク` | パターンC強制（git worktree） |
 | `/go-light タスク` | 軽量ワークフロー（simple.yaml使用） |
 | `/go-issue [番号]` | GitHub Issueから実装開始 |
+| `/create-skill <name> <desc>` | プロジェクト固有のskillテンプレートを生成 |
+| `/create-agent` | 技術スタックに応じた専門agentを自動生成 |
 | `/status` | 現在の進捗状況を表示 |
 | `/review` | 手動でコードレビューを実行 |
 | `/improve` | 手動で自己改善を実行 |
+| `/deploy` | バージョンアップ・PyPI公開を自動実行 |
 | `/clear` | Workerのコンテキストをクリア |
 
 ---
@@ -556,6 +561,7 @@ WORKER_COUNT=2
 ### 10.1 Claude Max制限
 - **5並列制限**: Conductor用1 + Worker最大4
 - **Extended Thinking無効**: `MAX_THINKING_TOKENS=0`
+- **Python 3.11+必須**: pyproject.tomlで `requires-python = ">=3.11"` と指定
 
 ### 10.2 共通禁止事項
 - ペイン番号（main.0, main.1等）の使用 → ペインIDを使え

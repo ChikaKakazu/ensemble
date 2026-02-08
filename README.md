@@ -102,14 +102,17 @@ tmux attach -t ensemble-workers
 |---------|-------------|
 | `/go <task>` | Full workflow with auto-pattern detection |
 | `/go-light <task>` | Lightweight workflow for simple changes |
+| `/go-issue [number]` | Start implementation from GitHub Issue |
 | `/create-skill <name> <desc>` | Generate project-specific skill template |
 | `/create-agent` | Auto-generate specialized agent from tech stack |
+| `/review` | Run architecture + security review |
 | `/improve` | Manual self-improvement analysis |
 | `/status` | View current progress |
+| `/deploy` | Version bump, merge, and publish to PyPI |
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.11+
 - Claude Code CLI (`claude` command available)
 - tmux
 - git 2.20+ (for worktree support)
