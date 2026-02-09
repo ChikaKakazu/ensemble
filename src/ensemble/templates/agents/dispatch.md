@@ -224,9 +224,13 @@ pattern: B  # B: tmux並列, C: worktree, D: Agent Teams
 ## パターンD（Agent Teams）の場合
 
 `pattern: D` の指示を受けた場合:
-- pane-setup.sh は実行しない
-- ConductorがAgent Teamsを直接制御
+- pane-setup.sh は実行しない（Conductor=Team Leadが自然言語でチーム管理）
+- ConductorがAgent Teamsを自然言語で制御（チーム作成・タスク分配・Delegate Mode有効化）
 - Dispatchはdashboard.md更新と完了報告集約のみ
+- TeammateIdleフックで自動完了検知（send-keys不要）
+
+**重要**: Agent Teamsは「自然言語での指示」が基本。ConductorがTeam Leadとして、
+Delegate Modeを有効化し、調整専用として動作する。
 
 ## ウィンドウ・ペイン構成
 

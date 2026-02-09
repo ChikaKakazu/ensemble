@@ -5,8 +5,10 @@
 #   CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 が設定されていること
 #
 # 特徴:
-#   - 通信はSendMessage（自動配信）
-#   - タスク管理はTaskCreate/TaskList/TaskUpdate
+#   - チーム作成・タスク分配は自然言語で指示
+#   - 通信はAgent Teams自動配信（message/broadcast）
+#   - タスク管理は共有タスクリスト（~/.claude/tasks/{team-name}/）
+#   - 完了検知はTeammateIdle/TaskCompletedフック
 #   - 計画・レビュー・改善はEnsemble独自
 #   - 従来のpane-setup.sh / send-keys不要
 
@@ -27,56 +29,93 @@ phases:
       - select_workflow
       - user_approval
 
-  # Phase 2: チーム作成 & タスク配信（Agent Teams）
-  execute:
-    method: agent_teams  # 従来は tmux_parallel or worktree
+  # Phase 2: チーム作成（Agent Teams - 自然言語ベース）
+  team_setup:
+    method: natural_language
     actions:
-      - team_create:
-          team_name: "ensemble-{task_id}"
-          description: "{task_description}"
-      - spawn_teammates:
-          # ワーカーを.claude/agents/worker.mdベースでspawn
-          base_agent: worker
-          count: "{worker_count}"
-      - task_create:
-          # 各サブタスクをTaskListに登録
-          tasks: "{subtasks}"
+      - team_creation:
+          # 自然言語で指示
+          instruction: >
+            Create an agent team named "ensemble-{task_id}" with {worker_count} teammates.
+            Each teammate should be based on the worker agent definition in .claude/agents/worker.md.
+            Use Sonnet model for all teammates.
+      - enable_delegate_mode:
+          # Shift+Tab で有効化
+          method: keyboard_shortcut  # Shift+Tab
+          effect: restrict_lead_to_coordination  # Conductor = 調整専用
       - assign_tasks:
-          # SendMessageで各ワーカーに指示
-          method: send_message
-      - wait_completion:
-          # idle通知 + TaskList監視で完了検知
-          method: task_list_poll
-          timeout: 1800  # 30分
+          # 各teammateに自然言語で指示
+          method: natural_language  # "Implement X in src/..." 形式
+          require_plan_approval: true  # 実装前に計画承認を要求
 
-  # Phase 3: レビュー（Ensemble独自）
+  # Phase 3: 実行監視（Agent Teams）
+  execute:
+    method: agent_teams_execution
+    actions:
+      - teammate_work:
+          # 各teammateが独立して作業
+          task_source: shared_task_list  # ~/.claude/tasks/{team-name}/
+          file_locking: enabled  # 競合防止
+      - monitor_progress:
+          # 共有タスクリストを監視
+          poll_interval: 30  # 30秒ごとにチェック
+          timeout: 1800  # 30分
+      - completion_detection:
+          # 完了検知
+          hooks:
+            - teammate_idle  # メイトアイドル時
+            - task_completed  # タスク完了マーク時
+
+  # Phase 4: レビュー（Ensemble独自 + Agent Teams Hooks統合）
   review:
+    triggers:
+      - on_teammate_idle:  # TeammateIdleフック
+          action: run_reviewer
+      - on_task_completed:  # TaskCompletedフック
+          action: run_security_reviewer
     parallel:
       - agent: reviewer
         model: sonnet
         focus: architecture
+        gate:
+          on_failure: send_feedback  # exit code 2でフィードバック送信
       - agent: security-reviewer
         model: sonnet
         focus: security
+        gate:
+          on_failure: reject_completion  # exit code 2で完了拒否
     merge_strategy: all_approved
 
-  # Phase 4: 修正ループ（必要な場合）
+  # Phase 5: 修正ループ（必要な場合）
   fix_loop:
     max_iterations: 3
     trigger: any_needs_fix
     actions:
-      - send_fix_instructions  # SendMessageで修正指示
-      - wait_fix_completion
-      - re_review
+      - send_fix_instructions:
+          # 自然言語で修正指示（message または broadcast）
+          method: natural_language
+      - wait_fix_completion:
+          # TeammateIdle/TaskCompletedフックで再検知
+          detection: hooks
+      - re_review:
+          # レビューを再実行
+          repeat: review_phase
 
-  # Phase 5: クリーンアップ
+  # Phase 6: クリーンアップ
   cleanup:
     actions:
-      - team_delete
-      - dashboard_update
-      - completion_report
+      - team_shutdown:
+          # 自然言語で指示: "Clean up the team"
+          method: natural_language
+          instruction: "Clean up the team"
+      - dashboard_update:
+          # ダッシュボード最終更新
+          file: status/dashboard.md
+      - completion_report:
+          # 完了報告作成
+          file: queue/reports/completion-summary.yaml
 
-  # Phase 6: 自己改善（Ensemble独自）
+  # Phase 7: 自己改善（Ensemble独自）
   improve:
     agent: learner
     model: sonnet
@@ -92,3 +131,16 @@ fallback:
     - agent_teams_unavailable
     - team_create_failed
     - timeout_exceeded
+  cleanup_on_fallback:
+    - team_shutdown  # "Clean up the team" を実行
+    - record_failure  # MEMORY.md更新用に記録
+
+# Agent Teams設定
+agent_teams_config:
+  teammate_mode: tmux  # Ensembleはtmux推奨（auto/in-process/tmux）
+  shared_task_list_path: ~/.claude/tasks/{team_name}/
+  hooks:
+    teammate_idle: .claude/hooks/TeammateIdle
+    task_completed: .claude/hooks/TaskCompleted
+  delegate_mode: enabled  # Conductor = 調整専用
+  plan_approval: required  # 実装前に計画承認

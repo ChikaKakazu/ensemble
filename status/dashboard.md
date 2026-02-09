@@ -1,85 +1,93 @@
 # Ensemble Dashboard
 
 ## Current Status
-**✅ 全タスク完了（1/1成功）**
+**✅ 全タスク完了（2/2成功）**
 
 ## 完了タスク
 | Task | Worker | Status | Files Modified | Completed At |
 |------|--------|--------|---------------|--------------|
-| task-015 | worker-1 | ✅ success | 2 files | 18:43:00 |
+| task-017 | worker-1 | ✅ success | 4 files | 02:58:00 |
+| task-018 | worker-2 | ✅ success | 3 files | 02:58:00 |
 
 ## 実装内容サマリー
 
-### task-015（Worker-1）✅
-**ドキュメント同期漏れ修正（README.md, USAGE.md）**
+### task-017（Worker-1）✅
+**Agent Teams設計書の更新（実ファイル4件）**
 
-**背景:**
-v0.4.9〜v0.4.10で追加された新機能がドキュメント未更新だった
+**対象ファイル:**
+1. `.claude/rules/agent-teams.md`（118行→400行、+282行、全面書き換え）
+2. `.claude/agents/conductor.md`（パターンDセクション更新）
+3. `.claude/agents/dispatch.md`（パターンDセクション更新）
+4. `workflows/agent-teams.yaml`（95行→147行、+52行）
 
 **更新内容:**
+- ✅ API風記述→自然言語ベース（TeamCreate等のAPI表記削除）
+- ✅ Delegate Mode（推奨）セクション追加
+- ✅ Hooks統合（品質ゲート）セクション追加（TeammateIdle/TaskCompleted）
+- ✅ 計画承認の活用セクション追加
+- ✅ 表示モード設定セクション追加（in-process/split panes/auto）
+- ✅ 制約事項（公式9項目）全記載
+- ✅ ベストプラクティス（公式+Ensemble統合）
+- ✅ トラブルシューティング表追加
 
-#### README.md（英語）の更新
-1. **In-Session Commands テーブルに追加**:
-   - `/rpi-research` - Research phase
-   - `/rpi-plan` - Plan phase
-   - `/rpi-implement` - Implement phase
+### task-018（Worker-2）✅
+**Agent Teams設計書の更新（テンプレート+ドキュメント3件）**
 
-2. **Features セクションに追加**:
-   - RPI Workflow: Research → Plan → Implement staged workflow
-   - Hooks Notification: Terminal bell on completion/errors
-   - Status Line: Real-time display of branch/session/workers
-   - CLAUDE.md 150-line Limit Check: Pre-commit hook
+**対象ファイル:**
+1. `src/ensemble/templates/agents/conductor.md`（パターンDセクション更新）
+2. `src/ensemble/templates/agents/dispatch.md`（パターンDセクション更新）
+3. `docs/preview-agent-teams-integration.md`（全体ドキュメント更新）
 
-#### USAGE.md（日本語）の更新
-1. **コマンド一覧に追加**:
-   - `/rpi-research` - 要件解析・技術調査
-   - `/rpi-plan` - 詳細計画策定
-   - `/rpi-implement` - 実装開始
+**更新内容:**
+- ✅ API表記（TeamCreate, SendMessage等）の削除
+- ✅ 自然言語ベースの実行フローへの書き換え
+- ✅ Delegate Mode の説明追加
+- ✅ Hooks統合（TeammateIdle/TaskCompleted）の説明追加
+- ✅ 計画承認（Require plan approval）の説明追加
+- ✅ 表示モード設定（in-process/split panes/auto）の説明追加
+- ✅ 制約事項を公式9項目で拡充
+- ✅ レビュー所見を更新（公式仕様との乖離解消を明記）
 
-2. **使用例セクションに追加**:
-   - 「6. RPI Workflow（大規模機能開発向け）」
-   - 3ステップの使用例（調査→計画→実装）
+## 修正ファイル合計: 7ファイル
 
-3. **新機能セクション追加（v0.4.9+）**:
-   - Hooks通知（Stop, PostToolUseFailure）
-   - Status Line（ブランチ・セッション・Worker数）
-   - CLAUDE.md行数チェック（150行制限）
+**実ファイル（4件）:**
+- `.claude/rules/agent-teams.md`
+- `.claude/agents/conductor.md`
+- `.claude/agents/dispatch.md`
+- `workflows/agent-teams.yaml`
 
-**効果:**
-- README.md, USAGE.md が最新機能と同期
-- ユーザーが新機能を発見しやすくなる
-- ドキュメントの一貫性を維持
-
-## 修正ファイル合計: 2ファイル
-- `README.md`（英語ドキュメント更新）
-- `USAGE.md`（日本語ドキュメント更新）
+**テンプレート+ドキュメント（3件）:**
+- `src/ensemble/templates/agents/conductor.md`
+- `src/ensemble/templates/agents/dispatch.md`
+- `docs/preview-agent-teams-integration.md`
 
 ## 配信統計
-- 配信成功: 1/1 = **100%**
-- ACK受信: 1/1 = **100%**
-- タスク完了: 1/1 = **100%**
+- 配信成功: 2/2 = **100%**
+- ACK受信: 2/2 = **100%**
+- タスク完了: 2/2 = **100%**
 - 再送回数: 0回
 
 ## 実行パターン
-- パターン: A (simple)
-- ワーカー数: 1
-- Workflow: simple
+- パターン: B (tmux並列)
+- ワーカー数: 2
+- Workflow: default
 
 ## 次のステップ
 Conductor判断待ち（レビュー・改善フェーズの実施有無）
 
+**推奨事項:**
+- Agent Teams設計書が公式仕様と整合
+- preview/agent-teams-integrationブランチで動作検証
+- 問題なければmainにマージ
+
 ---
 
-## 過去の完了タスク（task-012～task-014）
+## 過去の完了タスク（task-015）
 | Task | Worker | Status | Files Modified | Completed At |
 |------|--------|--------|---------------|--------------|
-| task-012 | worker-1 | ✅ success | 4 files | 18:05:00 |
-| task-013 | worker-2 | ✅ success | 3 files | 18:05:00 |
-| task-014 | worker-3 | ✅ success | 5 files | 18:05:00 |
+| task-015 | worker-1 | ✅ success | 2 files | 18:43:00 |
 
-**task-012**: Hooks（音声通知）+ Status Line の実装
-**task-013**: CLAUDE.md 150行制限チェックの実装
-**task-014**: RPI Workflow部分導入
+**task-015**: ドキュメント同期漏れ修正（README.md, USAGE.md）
 
 ---
 
@@ -87,4 +95,4 @@ Conductor判断待ち（レビュー・改善フェーズの実施有無）
 `queue/reports/completion-summary.yaml` を参照
 
 ---
-*Last updated: 2025-02-08T18:44:00+09:00*
+*Last updated: 2025-02-10T02:59:00+09:00*

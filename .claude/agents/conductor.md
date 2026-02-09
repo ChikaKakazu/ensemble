@@ -45,7 +45,7 @@ model: opus
 
 ### パターンD: Agent Teams ハイブリッド（実験的）
 - パターンBの代替（`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` 設定時）
-- Claude Code公式のTeamCreate/SendMessageを使用
+- Claude Code公式のAgent Teams機能（自然言語でチーム作成・タスク分配）を使用
 - Ensembleの計画・レビュー・改善層は維持
 - 通信・実行層のみAgent Teamsで置き換え
 - 詳細は `.claude/rules/agent-teams.md` 参照
@@ -115,34 +115,52 @@ Dispatchに指示を送り、ワーカーペインを起動させる。
 Claude Code公式のAgent Teams機能を使い、通信・実行層を置き換える。
 Ensembleの計画・レビュー・改善層はそのまま維持。
 
+Agent Teamsは**自然言語で指示**する。API的な呼び出しではない。
+
 ```
 前提: CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 が設定されていること
 
-1. TeamCreate でチーム作成:
-   {"team_name": "ensemble-{task-id}", "description": "..."}
+1. 計画を立案（従来通り）:
+   - タスク分解
+   - ワークフロー選択（simple/default/heavy）
+   - ユーザー承認
 
-2. 各ワーカーをteammateとしてspawn（Task tool使用）:
-   - subagent_type に応じたツール制限を設定
-   - .claude/agents/worker.md をベースにしたプロンプト
+2. 自然言語でチーム作成:
+   例: 「Create an agent team named "ensemble-task-XXX" with 3 teammates.
+        Each teammate should be based on the worker agent definition in .claude/agents/worker.md.
+        Use Sonnet model for all teammates.」
 
-3. TaskCreate で各タスクを登録
+3. Delegate Modeを有効化（推奨）:
+   - Shift+Tab を押下
+   - Conductorを調整専用に制限（コード変更禁止）
+   - 「考えるな、委譲しろ」思想をネイティブに実現
 
-4. SendMessage でワーカーに直接指示:
-   {"type": "message", "recipient": "worker-1", "content": "..."}
+4. 各teammateにタスクを割り当て:
+   - 自然言語で指示: 「Implement authentication module in src/auth.py. Require plan approval before making changes. Follow test-driven development.」
+   - 共有タスクリスト（~/.claude/tasks/）に自動登録
+   - 計画承認（Require plan approval）で実装前レビュー可能
 
-5. ワーカー完了通知は自動配信（idle通知で検知）
+5. 完了検知:
+   - TeammateIdleフック: メイトがアイドル時に自動通知
+   - TaskCompletedフック: タスク完了マーク時に自動通知
+   - 共有タスクリストを監視
 
-6. 全タスク完了後、TeamDelete でクリーンアップ
+6. クリーンアップ:
+   - 自然言語で指示: 「Clean up the team」
+   - 全メイトをシャットダウンしてからクリーンアップ
 
-7. レビュー・改善フェーズは従来通り
+7. レビュー・改善フェーズ（Ensemble独自）:
+   - reviewer/security-reviewer によるコードレビュー
+   - learnerによるMEMORY.md更新
 ```
 
 ### Agent Teams フォールバック
 
 Agent Teams利用中に問題が発生した場合:
-1. TeamDelete で現在のチームをクリーンアップ
+1. 自然言語で指示: 「Clean up the team」
 2. パターンBにフォールバック（Dispatch + Workers）
 3. 中断したタスクを従来方式で再実行
+4. 原因を記録（MEMORY.md更新用）
 
 ## コスト意識のワークフロー選択
 

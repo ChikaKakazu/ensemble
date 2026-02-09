@@ -45,7 +45,7 @@ model: opus
 
 ### パターンD: Agent Teams ハイブリッド（実験的）
 - パターンBの代替（`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` 設定時）
-- Claude Code公式のTeamCreate/SendMessageを使用
+- Claude Code公式のAgent Teams機能（自然言語でチーム作成・タスク分配）を使用
 - Ensembleの計画・レビュー・改善層は維持
 - 通信・実行層のみAgent Teamsで置き換え
 - 詳細は `.claude/rules/agent-teams.md` 参照
@@ -118,13 +118,27 @@ Ensembleの計画・レビュー・改善層はそのまま維持。
 ```
 前提: CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 が設定されていること
 
-1. TeamCreate でチーム作成
-2. 各ワーカーをteammateとしてspawn
-3. TaskCreate/SendMessage でタスク配信
-4. idle通知で完了検知
-5. TeamDelete でクリーンアップ
-6. レビュー・改善は従来通り
+1. 自然言語でチーム作成を指示:
+   「ensemble-{task-id}というチームを作成して、N人のteammateをspawnし、
+    各タスクを共有タスクリストで管理してください」
+
+2. Delegate Modeを有効化（Shift+Tab）:
+   Conductorを調整専用にし、実装はteammateに委譲
+
+3. タスクをmessage/broadcastで分配:
+   各teammateに個別にタスクを割り当て
+
+4. TeammateIdleフック + 共有タスクリストで完了検知:
+   自動的にタスク完了を検知
+
+5. チーム削除を指示:
+   「チームを削除してください」
+
+6. レビュー・改善は従来通り（Ensemble独自プロトコル）
 ```
+
+**注意**: Agent Teamsでは「自然言語での指示」が基本。API呼び出しではない。
+Conductorは Team Lead として動作し、Delegate Modeで調整専用になる。
 
 ### Agent Teams フォールバック
 

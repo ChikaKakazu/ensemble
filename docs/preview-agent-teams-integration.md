@@ -73,16 +73,28 @@ export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 }
 ```
 
-### 実行フロー
+### 実行フロー（自然言語ベース）
 
 ```
 1. Conductor が計画を立案（従来通り）
-2. TeamCreate でチームを作成
-3. 各ワーカーをteammateとしてspawn
-4. SendMessage でワーカーに直接指示
-5. idle通知 + TaskList監視で完了検知
-6. TeamDelete でクリーンアップ
-7. レビュー・改善フェーズは従来通り
+
+2. 自然言語でチーム作成を指示:
+   「ensemble-{task-id}というチームを作成し、N人のteammateをspawnしてください」
+   ※ API呼び出しではなく、自然言語での指示が基本
+
+3. Delegate Modeを有効化（Shift+Tab）:
+   Conductorを調整専用にし、実装はteammateに委譲
+
+4. タスクをmessage/broadcastで分配:
+   各teammateに個別にタスクを割り当て
+
+5. TeammateIdleフック + 共有タスクリストで完了検知:
+   自動的にタスク完了を検知
+
+6. チーム削除を指示:
+   「チームを削除してください」
+
+7. レビュー・改善フェーズは従来通り（Ensemble独自プロトコル）
 ```
 
 ### フォールバック
@@ -114,6 +126,51 @@ Agent Teams利用中に問題が発生した場合:
 | エラー検知 | ポーリング必須 | idle通知で自動検知 |
 | コンテキスト | /clear手動管理 | in-process自動管理 |
 | 可視性 | tmuxペインで直接確認 | UI通知 + TaskList |
+
+### Delegate Mode（推奨）
+
+**Shift+Tab** で有効化。Conductorを調整専用に制限（コード変更禁止）。
+Ensembleの「Conductor = 判断のみ、コードは書かない」思想をネイティブに実現。
+
+- チーム作成後、Conductorペインで **Shift+Tab** を押下
+- Conductorはコード変更が禁止され、調整・判断・レビュー承認のみ実行
+- 実際のコード変更は全てteammatesが担当
+
+**詳細**: `.claude/rules/agent-teams.md` 参照
+
+### Hooks統合（品質ゲート）
+
+Agent Teams固有のHooksをEnsembleのレビュー・品質チェックに統合。
+
+- **TeammateIdle**: メイトがアイドル時に実行 → reviewerを自動起動
+- **TaskCompleted**: タスク完了マーク時に実行 → security-reviewerでチェック
+
+exit code 2でフィードバック送信または完了拒否が可能。
+
+**詳細**: `.claude/rules/agent-teams.md` 参照
+
+### 計画承認の活用
+
+メイトに実装前の計画を要求可能（"Require plan approval"）。
+Ensembleの計画重視思想と合致。
+
+1. Teammateが計画を提出
+2. Conductor（= Team Lead）が計画をレビュー
+3. 承認 → 実装開始 / 却下 → 計画修正
+
+**詳細**: `.claude/rules/agent-teams.md` 参照
+
+### 表示モード設定
+
+| モード | 説明 | 要件 |
+|-------|------|------|
+| **in-process** | メインターミナル内。Shift+Up/Downで切替 | なし |
+| **split panes** | tmux/iTerm2で各メイトに独自ペイン | tmux or iTerm2 |
+| **auto**（デフォルト） | tmux内ならsplit、それ以外はin-process | - |
+
+Ensembleでは **tmux** を推奨（既にtmuxで管理しているため）。
+
+**詳細**: `.claude/rules/agent-teams.md` 参照
 
 ---
 
@@ -232,19 +289,45 @@ Claude Code の `TodoWrite` ツールをWorkerのタスク進捗管理に活用�
 - [x] 後方互換性: LEARNED.mdレガシー対応あり
 - [x] セキュリティ: 秘密情報の混入なし
 
-### 注意点
+### 更新完了事項（task-017/task-018）
+
+| 項目 | 内容 |
+|------|------|
+| ✅ 公式仕様との同期 | API表記（TeamCreate等）を削除し、自然言語ベースに書き換え |
+| ✅ Delegate Mode追加 | Conductorを調整専用に制限する機能を統合 |
+| ✅ Hooks統合 | TeammateIdle/TaskCompletedフックで品質ゲートを実装 |
+| ✅ 計画承認追加 | Require plan approvalで実装前のレビューを可能に |
+| ✅ 表示モード追加 | in-process/split panes/autoの設定方法を記載 |
+| ✅ 制約事項拡充 | 公式9項目の制約事項を全て記載 |
+
+### 残存する注意点
 
 | 重要度 | 内容 |
 |--------|------|
-| MEDIUM | 実ファイルとテンプレートで詳細度に差分あり（conductor.md: 40行 vs 26行、dispatch.md: 23行 vs 6行）。意図的な簡略化の可能性あるが要確認 |
-| LOW | テンプレート版setup.shにLEARNED.md→MEMORY.md移行チェック処理がない（新規プロジェクトでは実害なし） |
-| LOW | dispatch-instruction.yamlの`type: start_agent_teams`の使用ケースが不明確（パターンDではDispatch経由しない設計のため） |
+| INFO | Agent Teamsはリサーチプレビュー機能。仕様変更の可能性あり |
 | INFO | workflows/agent-teams.yamlは宣言的定義。パースするランタイムコードは未実装（他workflowも同様） |
+| INFO | テンプレート版は簡略版。詳細は実ファイル（.claude/agents/）および .claude/rules/agent-teams.md を参照 |
 
 ---
 
-## 7. 制約事項
+## 7. 制約事項（公式）
 
-- Agent Teamsは**リサーチプレビュー**のため、APIの仕様変更の可能性あり
+Agent Teamsの公式制約事項を全て記載（2025年2月時点）:
+
+1. **セッション再開不可**: `/resume`でin-processメイトは復元されない
+2. **タスクステータスのラグ**: メイトがタスク完了マークを忘れることがある
+3. **シャットダウンが遅い**: メイトは現在のリクエスト完了を待つ
+4. **1セッション1チーム**: 新チーム前にクリーンアップ必須
+5. **ネスト不可**: メイトは自分のチーム/メイトを作れない
+6. **リーダー固定**: チーム作成セッションがリーダー
+7. **権限はスポーン時に継承**: 後から個別変更は可能だがスポーン時には不可
+8. **splitペインはtmux/iTerm2必須**: VS Code、Windows Terminal、Ghostty非対応
+9. **仕様変更の可能性**: リサーチプレビュー機能のため、将来の仕様変更あり
+
+**Ensemble特有の注意点**:
 - `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` の設定が必要（デフォルトは無効）
 - 従来のパターンB（tmux並列）は常にフォールバックとして利用可能
+- Delegate Modeの活用を推奨（Conductorを調整専用に）
+- Hooksで品質ゲートを実装（TeammateIdle/TaskCompleted）
+
+**詳細**: `.claude/rules/agent-teams.md` 参照
