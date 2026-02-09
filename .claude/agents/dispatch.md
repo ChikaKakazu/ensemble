@@ -208,6 +208,7 @@ Dispatchは以下の場合に行動を開始する:
 ```yaml
 type: start_workers  # or start_worktree or start_agent_teams
 worker_count: 2
+worker_agent: worker  # オプション: 専門agentを指定（デフォルトは worker）
 tasks:
   - id: task-001
     instruction: "タスクの説明"
@@ -220,17 +221,33 @@ workflow: default
 pattern: B  # B: tmux並列, C: worktree, D: Agent Teams
 ```
 
+### worker_agent フィールド（オプション）
+
+create-agentで生成した専門agent（frontend-specialist等）をWorkerとして使う場合に指定:
+
+- **未指定時**: デフォルトの `worker` agent を使用
+- **指定時**: `WORKER_AGENT=<agent名>` を環境変数として pane-setup.sh に渡す
+
+**pane-setup.sh呼び出し時の指定方法:**
+```bash
+# worker_agentが指定されている場合
+WORKER_AGENT="${worker_agent}" ./scripts/pane-setup.sh ${worker_count}
+
+# worker_agentが未指定の場合（デフォルト）
+./scripts/pane-setup.sh ${worker_count}
+```
+
 ## パターンD（Agent Teams）の場合
 
 `pattern: D` の指示を受けた場合、Dispatchは以下を実行:
 
 1. **従来のpane-setup.shは実行しない**
-2. **Conductorに委譲**: Agent TeamsはConductorが直接制御する
+2. **Conductorに委譲**: Agent TeamsはTeam Leadとして自然言語でチームを作成・管理する
 3. Dispatchの役割はダッシュボード更新と完了報告の集約のみ
 
 ```
 pattern D のフロー:
-  Conductor → TeamCreate/SendMessage で直接ワーカー制御
+  Conductor (= Team Lead) → 自然言語でチーム作成・タスク分配
   Dispatch  → dashboard.md更新 + completion-summary.yaml作成のみ
 ```
 
@@ -241,8 +258,8 @@ pattern D のフロー:
 
 ### Dispatchが行わないこと（パターンD）
 - pane-setup.sh の実行（不要）
-- send-keysによるワーカー通知（Agent Teamsが自動で行う）
-- ACKファイルの待機（Agent Teamsのidle通知で代替）
+- send-keysによるワーカー通知（Agent Teamsの自動メッセージ配信で代替）
+- ACKファイルの待機（Agent TeamsのTeammateIdle通知で代替）
 
 ## ウィンドウ・ペイン構成
 

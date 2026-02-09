@@ -1,63 +1,90 @@
 # Ensemble Dashboard
 
 ## Current Status
-**✅ CLAUDE.md分割の影響修正完了**
+**✅ 全タスク完了（1/1成功）**
 
 ## 完了タスク
-| Task | Worker | Status | Details |
-|------|--------|--------|---------|
-| task-001 | worker-1 | ✅ completed | learner.md, improve.md, setup.sh 修正 |
-| task-002 | worker-2 | ✅ completed | テンプレート版3ファイル修正 |
+| Task | Worker | Status | Files Modified | Completed At |
+|------|--------|--------|---------------|--------------|
+| task-015 | worker-1 | ✅ success | 2 files | 18:43:00 |
 
-## 実装内容
+## 実装内容サマリー
 
-### Issue: CLAUDE.md分割による影響修正
+### task-015（Worker-1）✅
+**ドキュメント同期漏れ修正（README.md, USAGE.md）**
 
 **背景:**
-- CLAUDE.md（284行）を分割し、.claude/rules/に移動
-- 学習済みルールをLEARNED.mdに分離
-- learner agentとimprove commandが追記先を見つけられなくなった
+v0.4.9〜v0.4.10で追加された新機能がドキュメント未更新だった
 
-**修正完了（6ファイル）:**
+**更新内容:**
 
-#### task-001（Worker-1）
-1. `.claude/agents/learner.md`（6箇所修正）
-   - 「CLAUDE.md更新提案」→「LEARNED.md更新提案」に変更
-   - 禁止事項「CLAUDE.mdを直接編集」→「LEARNED.mdを直接編集」に変更
-   - プロトコル内の参照も全て更新
+#### README.md（英語）の更新
+1. **In-Session Commands テーブルに追加**:
+   - `/rpi-research` - Research phase
+   - `/rpi-plan` - Plan phase
+   - `/rpi-implement` - Implement phase
 
-2. `.claude/commands/improve.md`（6箇所修正）
-   - description: 「CLAUDE.md更新提案」→「LEARNED.md更新提案」
-   - Step 4のセクション名を更新
-   - Step 5の提案表示フォーマットを更新
-   - grepコマンドの対象をLEARNED.mdに変更
-   - 注意事項の参照を全て更新
+2. **Features セクションに追加**:
+   - RPI Workflow: Research → Plan → Implement staged workflow
+   - Hooks Notification: Terminal bell on completion/errors
+   - Status Line: Real-time display of branch/session/workers
+   - CLAUDE.md 150-line Limit Check: Pre-commit hook
 
-3. `scripts/setup.sh`
-   - CLAUDE.md内の「学習済みルール（自動追記）」セクションを削除
-   - LEARNED.md作成処理を新規追加（3.5ステップ）
-   - LEARNED.mdのテンプレートを追加（説明コメント含む）
+#### USAGE.md（日本語）の更新
+1. **コマンド一覧に追加**:
+   - `/rpi-research` - 要件解析・技術調査
+   - `/rpi-plan` - 詳細計画策定
+   - `/rpi-implement` - 実装開始
 
-#### task-002（Worker-2）
-1. `src/ensemble/templates/agents/learner.md`
-   - 「学習済みルール」セクションへの参照をLEARNED.mdに変更
-   - 追記先を明示
+2. **使用例セクションに追加**:
+   - 「6. RPI Workflow（大規模機能開発向け）」
+   - 3ステップの使用例（調査→計画→実装）
 
-2. `src/ensemble/templates/commands/improve.md`
-   - CLAUDE.md更新提案→LEARNED.md更新提案に変更
-   - LEARNED.md作成処理を追加
+3. **新機能セクション追加（v0.4.9+）**:
+   - Hooks通知（Stop, PostToolUseFailure）
+   - Status Line（ブランチ・セッション・Worker数）
+   - CLAUDE.md行数チェック（150行制限）
 
-3. `src/ensemble/templates/scripts/setup.sh`
-   - CLAUDE.mdから「学習済みルール」セクションを削除
-   - LEARNED.md作成処理を追加（ステップ4）
+**効果:**
+- README.md, USAGE.md が最新機能と同期
+- ユーザーが新機能を発見しやすくなる
+- ドキュメントの一貫性を維持
 
-## 実行結果
-- ✅ 全6ファイル修正完了
-- ✅ learner agentとimprove commandが正しくLEARNED.mdに追記可能
-- ✅ エラーなし
+## 修正ファイル合計: 2ファイル
+- `README.md`（英語ドキュメント更新）
+- `USAGE.md`（日本語ドキュメント更新）
 
-## 詳細報告
-queue/reports/completion-summary.yaml を参照
+## 配信統計
+- 配信成功: 1/1 = **100%**
+- ACK受信: 1/1 = **100%**
+- タスク完了: 1/1 = **100%**
+- 再送回数: 0回
+
+## 実行パターン
+- パターン: A (simple)
+- ワーカー数: 1
+- Workflow: simple
+
+## 次のステップ
+Conductor判断待ち（レビュー・改善フェーズの実施有無）
 
 ---
-*Last updated: 2025-02-05T21:58:00+09:00*
+
+## 過去の完了タスク（task-012～task-014）
+| Task | Worker | Status | Files Modified | Completed At |
+|------|--------|--------|---------------|--------------|
+| task-012 | worker-1 | ✅ success | 4 files | 18:05:00 |
+| task-013 | worker-2 | ✅ success | 3 files | 18:05:00 |
+| task-014 | worker-3 | ✅ success | 5 files | 18:05:00 |
+
+**task-012**: Hooks（音声通知）+ Status Line の実装
+**task-013**: CLAUDE.md 150行制限チェックの実装
+**task-014**: RPI Workflow部分導入
+
+---
+
+## 詳細報告
+`queue/reports/completion-summary.yaml` を参照
+
+---
+*Last updated: 2025-02-08T18:44:00+09:00*

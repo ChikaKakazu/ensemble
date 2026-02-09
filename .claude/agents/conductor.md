@@ -68,11 +68,18 @@ model: opus
 Dispatchに指示を送り、ワーカーペインを起動させる。
 
 ```
-1. タスクを分解し、ワーカー数を決定
+1. タスクを分解し、ワーカー数を動的に決定:
+   - タスク数 1〜2個 → worker_count: 2（最小構成）
+   - タスク数 3個 → worker_count: 3
+   - タスク数 4個以上 → worker_count: 4（Claude Max並列上限考慮）
+
+   注意: Claude Max 5並列制限により、Conductor用に1セッション確保するため
+         ワーカーは最大4並列まで
+
 2. queue/conductor/dispatch-instruction.yaml に指示を書く:
 
    type: start_workers
-   worker_count: 2
+   worker_count: 3  # タスク数に応じて動的に決定
    tasks:
      - id: task-001
        instruction: "タスク1の説明"
@@ -80,6 +87,9 @@ Dispatchに指示を送り、ワーカーペインを起動させる。
      - id: task-002
        instruction: "タスク2の説明"
        files: ["file2.py"]
+     - id: task-003
+       instruction: "タスク3の説明"
+       files: ["file3.py"]
    created_at: "{現在時刻}"
    workflow: default
    pattern: B
@@ -248,20 +258,32 @@ Claude Max 5並列制限を考慮:
 Dispatchへの委譲後、以下のポーリング処理を実行:
 
 ```bash
-# 完了待機ループ（30秒間隔、最大30分）
+# 完了・エスカレーション待機ループ（30秒間隔、最大30分）
 for i in $(seq 1 60); do
   if [ -f "queue/reports/completion-summary.yaml" ]; then
     echo "タスク完了を検知"
+    break
+  fi
+  ESCALATION=$(ls queue/reports/escalation-*.yaml 2>/dev/null | head -1)
+  if [ -n "$ESCALATION" ]; then
+    echo "🚨 エスカレーション検知: $ESCALATION"
     break
   fi
   sleep 30
 done
 ```
 
-完了検知後:
+**完了検知後**:
 1. `queue/reports/completion-summary.yaml` を読み込む
 2. 結果をユーザーに報告
 3. completion-summary.yaml を削除（次回の検知のため）
+
+**エスカレーション検知後**:
+1. エスカレーションYAMLを読み込む
+2. 問題を分析し、修正方針を決定
+3. 修正実施後、Dispatchに再開指示を送信
+4. エスカレーションYAMLを削除
+5. ポーリングを再開（完了待機に戻る）
 
 ## 自律判断チェックリスト
 

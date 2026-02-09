@@ -55,3 +55,14 @@
 
 summaryの「次のステップ」を見てすぐ作業してはならぬ。
 **まず自分が誰かを確認せよ。**
+
+## CLAUDE.md 行数制限
+
+**CLAUDE.mdは150行以内に保つこと**
+
+Claude Code Best Practiceによると、CLAUDE.mdが150行を超えると指示が守られにくくなる。
+詳細なルールは `.claude/rules/` に分割すること。
+
+自動チェック:
+- pre-commit hook: `.githooks/check-claude-md.sh`
+- hookify: `.claude/hooks/scripts/check-claude-md-lines.sh`

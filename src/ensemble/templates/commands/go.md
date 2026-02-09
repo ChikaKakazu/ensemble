@@ -71,18 +71,32 @@ $ARGUMENTS
 
 ### 完了待機（全パターン共通）
 
-Dispatchへの委譲後、ポーリングで完了を待機:
+Dispatchへの委譲後、ポーリングで完了またはエスカレーションを待機:
 
 ```bash
-# 完了待機（30秒間隔）
-while [ ! -f "queue/reports/completion-summary.yaml" ]; do
+# 完了・エスカレーション待機（30秒間隔）
+for i in $(seq 1 60); do
+  if [ -f "queue/reports/completion-summary.yaml" ]; then
+    echo "タスク完了を検知"
+    break
+  fi
+  ESCALATION=$(ls queue/reports/escalation-*.yaml 2>/dev/null | head -1)
+  if [ -n "$ESCALATION" ]; then
+    echo "🚨 エスカレーション検知: $ESCALATION"
+    break
+  fi
   sleep 30
 done
 ```
 
-完了検知後:
+**完了検知後**:
 1. completion-summary.yaml を読み込み
 2. Phase 3（レビュー）へ進む
+
+**エスカレーション検知後**:
+1. エスカレーションYAMLを読み込み、問題を分析
+2. 修正実施後、Dispatchに再開指示を送信
+3. エスカレーションYAMLを削除し、ポーリングを再開
 
 ### Phase 3: レビュー
 

@@ -47,6 +47,7 @@ def run_upgrade(dry_run: bool = False, force: bool = False, diff: bool = False) 
     files_to_update = []
     files_to_update.extend(_scan_directory("agents", project_root))
     files_to_update.extend(_scan_directory("commands", project_root))
+    files_to_update.extend(_scan_scripts(project_root))
 
     if not files_to_update:
         click.echo(click.style("All files are up to date!", fg="green"))
@@ -95,6 +96,47 @@ def _scan_directory(template_type: str, project_root: Path) -> List[Tuple[str, s
     results = []
 
     for template_file in template_dir.glob("*.md"):
+        local_file = local_dir / template_file.name
+        relative_path = str(local_file.relative_to(project_root))
+
+        if not local_file.exists():
+            results.append(("new", relative_path, "(new file)"))
+        else:
+            # Check if file was modified by user
+            if check_file_modified(project_root, relative_path, local_file):
+                results.append(("skip", relative_path, "(modified locally, skipping)"))
+            else:
+                # Check if template has changed
+                template_hash = compute_file_hash(template_file)
+                local_hash = compute_file_hash(local_file)
+                if template_hash != local_hash:
+                    results.append(("update", relative_path, "(no local changes)"))
+                # else: file is up to date, don't include in list
+
+    return results
+
+
+def _scan_scripts(project_root: Path) -> List[Tuple[str, str, str]]:
+    """Scan scripts directory and determine what needs updating.
+
+    Args:
+        project_root: Root directory of the project
+
+    Returns:
+        List of (status, relative_path, reason) tuples
+        Status can be: "new", "update", "skip", "force_update"
+    """
+    template_dir = get_template_path("scripts")
+    if not template_dir.exists():
+        return []
+
+    local_dir = project_root / "scripts"
+    if not local_dir.exists():
+        return []
+
+    results = []
+
+    for template_file in template_dir.glob("*.sh"):
         local_file = local_dir / template_file.name
         relative_path = str(local_file.relative_to(project_root))
 
@@ -235,18 +277,26 @@ def _get_template_file_for_relative_path(relative_path: str) -> Path:
     """Get template file path for a relative path.
 
     Args:
-        relative_path: Relative path like ".claude/agents/conductor.md"
+        relative_path: Relative path like ".claude/agents/conductor.md" or "scripts/setup.sh"
 
     Returns:
         Path to the template file
     """
     parts = Path(relative_path).parts
+
+    # Handle scripts/ directory
+    if relative_path.startswith("scripts/"):
+        filename = parts[-1]
+        return get_template_path("scripts") / filename
+
+    # Handle .claude/ directory
     if ".claude" in parts:
         idx = parts.index(".claude")
         if idx + 1 < len(parts):
             template_type = parts[idx + 1]  # "agents" or "commands"
             filename = parts[-1]
             return get_template_path(template_type) / filename
+
     return None
 
 

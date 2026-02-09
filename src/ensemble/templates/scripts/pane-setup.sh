@@ -37,25 +37,28 @@
 
 set -euo pipefail
 
-CONDUCTOR_SESSION="${CONDUCTOR_SESSION:-ensemble-conductor}"
-WORKERS_SESSION="${WORKERS_SESSION:-ensemble-workers}"
+REQUESTED_WORKER_COUNT="${1:-2}"  # 引数を別変数に保存（source上書き防止）
 PROJECT_DIR="${PROJECT_DIR:-$(pwd)}"
-WORKER_COUNT="${1:-2}"  # デフォルト2ワーカー
 PANES_FILE="$PROJECT_DIR/.ensemble/panes.env"
 
 # 最大4ワーカー（Claude Max 5並列 - Conductor用1を除く）
-if [ "$WORKER_COUNT" -gt 4 ]; then
-    echo "Warning: Max 4 workers allowed. Reducing from $WORKER_COUNT to 4."
-    WORKER_COUNT=4
+if [ "$REQUESTED_WORKER_COUNT" -gt 4 ]; then
+    echo "Warning: Max 4 workers allowed. Reducing from $REQUESTED_WORKER_COUNT to 4."
+    REQUESTED_WORKER_COUNT=4
 fi
 
-# panes.env から既存のペインIDを読み込む
+# panes.env から既存のペインIDを読み込む（CONDUCTOR_PANE, DISPATCH_PANE等を取得）
 if [ -f "$PANES_FILE" ]; then
     source "$PANES_FILE"
 else
     echo "Error: $PANES_FILE not found. Run launch.sh first."
     exit 1
 fi
+
+# sourceで上書きされたWORKER_COUNTを引数の値で復元
+CONDUCTOR_SESSION="${CONDUCTOR_SESSION:-ensemble-conductor}"
+WORKERS_SESSION="${WORKERS_SESSION:-ensemble-workers}"
+WORKER_COUNT="$REQUESTED_WORKER_COUNT"
 
 echo "Adding $WORKER_COUNT worker panes to ensemble-workers:main window..."
 
@@ -107,10 +110,12 @@ for i in $(seq 1 "$WORKER_COUNT"); do
     echo "  Worker-$i pane: $NEW_PANE"
     WORKER_PANES+=("$NEW_PANE")
 
-    # WORKER_ID環境変数を設定して、--agent workerでClaudeを起動
+    # WORKER_ID環境変数を設定して、--agentでClaudeを起動
+    # WORKER_AGENT環境変数が設定されていればそれを使用、なければ worker をデフォルト
     # 重要: send-keysは2回分割で送信（shogunパターン）
+    AGENT_NAME="${WORKER_AGENT:-worker}"
     tmux send-keys -t "$NEW_PANE" \
-        "export WORKER_ID=$i && claude --agent worker --dangerously-skip-permissions"
+        "export WORKER_ID=$i && claude --agent $AGENT_NAME --dangerously-skip-permissions"
     sleep 1
     tmux send-keys -t "$NEW_PANE" Enter
 
