@@ -206,7 +206,7 @@ Dispatchは以下の場合に行動を開始する:
 ## dispatch-instruction.yaml フォーマット
 
 ```yaml
-type: start_workers  # or start_worktree or start_agent_teams
+type: start_workers  # or start_worktree
 worker_count: 2
 worker_agent: worker  # オプション: 専門agentを指定（デフォルトは worker）
 tasks:
@@ -218,7 +218,7 @@ tasks:
     files: ["file3.py"]
 created_at: "2026-02-03T10:00:00Z"
 workflow: default
-pattern: B  # B: tmux並列, C: worktree, D: Agent Teams
+pattern: B  # B: tmux並列, C: worktree
 ```
 
 ### worker_agent フィールド（オプション）
@@ -236,46 +236,6 @@ WORKER_AGENT="${worker_agent}" ./scripts/pane-setup.sh ${worker_count}
 # worker_agentが未指定の場合（デフォルト）
 ./scripts/pane-setup.sh ${worker_count}
 ```
-
-## パターンD（Agent Teams）の場合
-
-`pattern: D` の指示を受けた場合、Dispatchは以下を実行:
-
-1. **従来のpane-setup.shは実行しない**
-2. **Conductorに委譲**: Agent TeamsはConductor（= Team Lead）が自然言語でチームを作成・管理する
-3. Dispatchの役割はダッシュボード更新と完了報告の集約のみ
-
-```
-pattern D のフロー:
-  Conductor (= Team Lead)
-    → 自然言語でチーム作成: "Create an agent team with 3 teammates..."
-    → 自然言語でタスク分配: "Implement feature X in src/..."
-    → Delegate Mode（Shift+Tab）で調整専用に
-
-  Dispatch
-    → dashboard.md更新
-    → completion-summary.yaml作成
-    → 完了通知
-```
-
-### Dispatchが行うこと（パターンD）
-- status/dashboard.md の更新（タスク状態の反映）
-- queue/reports/completion-summary.yaml の作成（全タスク完了時）
-- Conductorへの完了通知
-
-### Dispatchが行わないこと（パターンD）
-- pane-setup.sh の実行（不要）
-- send-keysによるワーカー通知（Agent Teamsの自動メッセージ配信で代替）
-- ACKファイルの待機（**TeammateIdleフック**で自動通知されるため）
-
-### Agent Teams固有の完了検知
-
-パターンDでは、従来のACK/完了報告ファイルの代わりに:
-- **TeammateIdleフック**: メイトがアイドル時に自動通知
-- **TaskCompletedフック**: タスク完了マーク時に自動通知
-- 共有タスクリスト（`~/.claude/tasks/{team-name}/`）の監視
-
-Dispatchはこれらの通知を受けて、dashboard.mdを更新する。
 
 ## ウィンドウ・ペイン構成
 

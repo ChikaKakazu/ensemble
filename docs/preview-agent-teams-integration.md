@@ -1,8 +1,8 @@
-# Preview: Agent Teams Integration
+# Preview: Agent Teams Mode Integration
 
 **ブランチ**: `preview/agent-teams-integration`
 **ステータス**: レビュー済み・マージ可能
-**コミット**: 2件 / **変更ファイル**: 18件（+534行, -67行）
+**変更ファイル**: 20件
 
 ---
 
@@ -10,52 +10,41 @@
 
 このブランチは以下の3つの機能をEnsembleに統合する:
 
-1. **Agent Teams ハイブリッドモード（パターンD）** - Claude Code公式のAgent Teams（リサーチプレビュー）をEnsembleの実行層に統合
+1. **Agent Teamsモード（調査・レビュー専用）** - Claude Code公式のAgent Teams（リサーチプレビュー）を調査・レビュータスクに活用
 2. **MEMORY.md移行** - LEARNED.md から Claude Code公式の自動メモリ機能（MEMORY.md）への移行
 3. **TodoWrite統合** - Workerのタスク進捗をClaude Code UIで可視化
 
+**重要**: Agent Teamsはパターン（A/B/C）とは**別軸**のモード。コード実装には使わず、調査・レビューに特化。
+
 ---
 
-## 2. Agent Teams ハイブリッドモード（パターンD）
+## 2. Agent Teamsモード（調査・レビュー専用）
 
 ### 設計方針
 
-Ensembleの3層アーキテクチャを維持しつつ、**通信・実行層のみ**をAgent Teamsで置き換える。
+Agent Teamsはパターン（A/B/C）とは**別軸**のモード。コード実装には使わず、以下のタスクに特化:
 
-```
-+---------------------------------------------------+
-|         Ensemble 計画・判断層（維持）                |
-|  Conductor (Opus)                                   |
-|    - タスク計画・分解                                |
-|    - ワークフロー選択                                |
-|    - 最終判断・レビュー統括                          |
-+---------------------------------------------------+
-                      |
-                      v
-+---------------------------------------------------+
-|     通信・実行層（Agent Teams で置き換え）           |
-|                                                     |
-|  [従来: パターンB]        [新規: パターンD]          |
-|  Dispatch + Workers       TeamCreate + SendMessage  |
-|  ファイルキュー            自動メッセージ配信         |
-|  send-keys通知             idle通知自動              |
-+---------------------------------------------------+
-                      |
-                      v
-+---------------------------------------------------+
-|         Ensemble レビュー・改善層（維持）            |
-|  Reviewer / Security-Reviewer / Learner             |
-+---------------------------------------------------+
-```
+- **技術調査**: ライブラリ比較、アーキテクチャ検討
+- **レビュー**: PR並列レビュー、セキュリティ監査
+- **計画策定**: 複数の視点から計画を練る
+
+**実装パターンとの違い**:
+
+| 項目 | パターンA/B/C | Agent Teamsモード |
+|------|---------------|-------------------|
+| 目的 | コード実装 | 調査・レビュー |
+| Dispatch | 使用 | 不使用 |
+| queue | 使用 | 不使用 |
+| 操作 | Dispatch経由 | Conductor直接 |
+
+### ユースケース
+
+1. **技術調査**: 複数のライブラリを並列調査して比較レポート
+2. **PR並列レビュー**: セキュリティ・パフォーマンス・テストの3視点で同時レビュー
+3. **アーキテクチャ検討**: 複数の設計案を並列で検証
+4. **バグ調査**: 複数の仮説を並列で検証
 
 ### パターン選択基準
-
-| パターン | 条件 | 通信方式 |
-|---------|------|---------|
-| A | ファイル数 <= 3、単純タスク | subagent直接 |
-| B | ファイル数 4-10、並列あり | tmux + send-keys |
-| C | ファイル数 > 10、独立機能 | git worktree |
-| **D（新規）** | パターンBと同条件 + `AGENT_TEAMS=1` | Agent Teams API |
 
 ### 有効化
 
@@ -75,57 +64,36 @@ export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 
 ### 実行フロー（自然言語ベース）
 
+ConductorがTeam Leadとして直接操作。Dispatch/queue不要。
+
 ```
-1. Conductor が計画を立案（従来通り）
+1. 自然言語でチーム作成:
+   「Create an agent team to research X technology.
+    Spawn 3 teammates to investigate different aspects.」
 
-2. 自然言語でチーム作成を指示:
-   「ensemble-{task-id}というチームを作成し、N人のteammateをspawnしてください」
-   ※ API呼び出しではなく、自然言語での指示が基本
+2. Delegate Modeを有効化（推奨）:
+   Conductorを調整専用にする
 
-3. Delegate Modeを有効化（Shift+Tab）:
-   Conductorを調整専用にし、実装はteammateに委譲
+3. タスクをmessage/broadcastで分配:
+   各teammateに調査・レビュータスクを割り当て
 
-4. タスクをmessage/broadcastで分配:
-   各teammateに個別にタスクを割り当て
+4. 完了検知:
+   TeammateIdleフック + 共有タスクリストで自動検知
 
-5. TeammateIdleフック + 共有タスクリストで完了検知:
-   自動的にタスク完了を検知
+5. チーム削除:
+   「Clean up the team」
 
-6. チーム削除を指示:
-   「チームを削除してください」
-
-7. レビュー・改善フェーズは従来通り（Ensemble独自プロトコル）
+6. 結果を統合して計画/レビュー報告に反映
 ```
 
-### フォールバック
+### Ensemble連携
 
-Agent Teams利用中に問題が発生した場合:
-1. `TeamDelete` で現在のチームをクリーンアップ
-2. パターンB（Dispatch + Workers）にフォールバック
-3. 中断したタスクを従来方式で再実行
+Agent Teams実行後、結果をEnsembleのワークフローに統合:
 
-### ワークフロー定義
-
-`workflows/agent-teams.yaml` で6フェーズを定義:
-
-| Phase | 担当 | 内容 |
-|-------|------|------|
-| plan | Conductor (Opus) | タスク分析・分解・ワークフロー選択・ユーザー承認 |
-| execute | Agent Teams | チーム作成・ワーカーspawn・タスク配信・完了待機 |
-| review | Reviewer + Security (並列) | アーキテクチャレビュー + セキュリティレビュー |
-| fix_loop | Agent Teams | 修正指示・再レビュー（最大3イテレーション） |
-| cleanup | Conductor | チーム削除・ダッシュボード更新・完了報告 |
-| improve | Learner (Sonnet) | 実行分析・MEMORY.md更新提案 |
-
-### SendMessage vs send-keys
-
-| 項目 | send-keys（従来） | SendMessage（Agent Teams） |
-|------|-------------------|---------------------------|
-| 信頼性 | ファイル+通知の2段構え | 自動配信（キュー付き） |
-| 遅延 | 2秒間隔の手動管理 | 自動（ターン終了時配信） |
-| エラー検知 | ポーリング必須 | idle通知で自動検知 |
-| コンテキスト | /clear手動管理 | in-process自動管理 |
-| 可視性 | tmuxペインで直接確認 | UI通知 + TaskList |
+1. 調査結果を分析
+2. 計画に反映（パターン選択、技術選定）
+3. レビュー結果をユーザーに報告
+4. 必要に応じてパターンA/B/Cで実装開始
 
 ### Delegate Mode（推奨）
 
@@ -233,19 +201,19 @@ Claude Code の `TodoWrite` ツールをWorkerのタスク進捗管理に活用�
 
 | ファイル | 変更内容 |
 |---------|---------|
-| `.claude/agents/conductor.md` | パターンD判定基準・実行方法・フォールバック追加（+41行） |
-| `.claude/agents/dispatch.md` | パターンD時の役割分担追加（+28行） |
-| `.claude/agents/learner.md` | MEMORY.md移行 + メモリシステム説明追加（+38行/-8行） |
-| `.claude/agents/worker.md` | TodoWriteセクション追加（+31行） |
+| `.claude/agents/conductor.md` | Agent Teamsモード（T）追加（調査・レビュー専用） |
+| `.claude/agents/dispatch.md` | パターンD削除（Agent Teamsは実装パターンではない） |
+| `.claude/agents/learner.md` | MEMORY.md移行 + メモリシステム説明追加 |
+| `.claude/agents/worker.md` | TodoWriteセクション追加 |
 
 ### エージェント定義（テンプレート）
 
 | ファイル | 変更内容 |
 |---------|---------|
-| `src/ensemble/templates/agents/conductor.md` | パターンD追加（簡略版、+27行） |
-| `src/ensemble/templates/agents/dispatch.md` | パターンD追加（簡略版、+11行） |
-| `src/ensemble/templates/agents/learner.md` | MEMORY.md移行 + メモリ説明（+27行/-7行） |
-| `src/ensemble/templates/agents/worker.md` | TodoWriteセクション追加（例なし、+20行） |
+| `src/ensemble/templates/agents/conductor.md` | Agent Teamsモード（T）追加（調査・レビュー専用） |
+| `src/ensemble/templates/agents/dispatch.md` | パターンD削除 |
+| `src/ensemble/templates/agents/learner.md` | MEMORY.md移行 + メモリ説明 |
+| `src/ensemble/templates/agents/worker.md` | TodoWriteセクション追加 |
 
 ### コマンド
 
@@ -258,24 +226,24 @@ Claude Code の `TodoWrite` ツールをWorkerのタスク進捗管理に活用�
 
 | ファイル | 変更内容 |
 |---------|---------|
-| `scripts/launch.sh` | Agent Teamsモード検出・表示（+20行/-1行） |
-| `scripts/setup.sh` | MEMORY.md作成処理・移行チェック（+33行/-9行） |
-| `src/ensemble/templates/scripts/launch.sh` | Agent Teamsモード検出・表示（+20行/-1行） |
-| `src/ensemble/templates/scripts/setup.sh` | MEMORY.md作成処理（+26行/-7行） |
+| `scripts/launch.sh` | Agent Teamsモード検出・表示（調査・レビュー専用） |
+| `scripts/setup.sh` | MEMORY.md作成処理・移行チェック |
+| `src/ensemble/templates/scripts/launch.sh` | Agent Teamsモード検出・表示（調査・レビュー専用） |
+| `src/ensemble/templates/scripts/setup.sh` | MEMORY.md作成処理 |
 
 ### 新規ファイル
 
 | ファイル | 内容 |
 |---------|------|
-| `.claude/rules/agent-teams.md` | Agent Teamsハイブリッドモードのルール定義（117行） |
-| `.claude/settings.json` | AGENT_TEAMS環境変数追加（+3行） |
-| `workflows/agent-teams.yaml` | Agent Teamsワークフロー定義（94行） |
+| `.claude/rules/agent-teams.md` | Agent Teamsモード（T）のルール定義（調査・レビュー専用、400行超） |
+| `.claude/settings.json` | AGENT_TEAMS環境変数追加 |
+| `workflows/agent-teams.yaml` | Agent Teamsワークフロー定義（宣言的定義） |
 
 ### 設定
 
 | ファイル | 変更内容 |
 |---------|---------|
-| `CLAUDE.md` | パターンD追記・MEMORY.md参照追加（+5行/-1行） |
+| `CLAUDE.md` | Agent Teamsモード（T）追記・MEMORY.md参照追加 |
 
 ---
 
@@ -283,17 +251,18 @@ Claude Code の `TodoWrite` ツールをWorkerのタスク進捗管理に活用�
 
 ### 確認済み（問題なし）
 
-- [x] 設計の一貫性: 3層構造を維持しつつAgent Teamsを実行層に統合
+- [x] 設計の明確化: Agent Teamsを「調査・レビュー専用モード」として再定義
 - [x] MEMORY.md移行: 18ファイル全てで参照先を正しく更新
-- [x] フォールバック: パターンBへの自動フォールバックを明記
+- [x] 実装との分離: コード実装はパターンA/B/C、調査・レビューはAgent Teamsモード（T）
 - [x] 後方互換性: LEARNED.mdレガシー対応あり
 - [x] セキュリティ: 秘密情報の混入なし
 
-### 更新完了事項（task-017/task-018）
+### 更新完了事項（task-017～task-020）
 
 | 項目 | 内容 |
 |------|------|
-| ✅ 公式仕様との同期 | API表記（TeamCreate等）を削除し、自然言語ベースに書き換え |
+| ✅ 公式仕様との同期 | API表記（TeamCreate等）を削除し、自然言語ベースに書き換え（task-017/018） |
+| ✅ モード再定義 | 「パターンD」→「Agent Teamsモード（T）」調査・レビュー専用に再定義（task-019/020） |
 | ✅ Delegate Mode追加 | Conductorを調整専用に制限する機能を統合 |
 | ✅ Hooks統合 | TeammateIdle/TaskCompletedフックで品質ゲートを実装 |
 | ✅ 計画承認追加 | Require plan approvalで実装前のレビューを可能に |

@@ -20,11 +20,11 @@ QUEUE_DIR="$PROJECT_DIR/queue"
 # Agent Teams モード検出
 AGENT_TEAMS_MODE="${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS:-0}"
 if [ "$AGENT_TEAMS_MODE" = "1" ]; then
-    echo "Launching Ensemble (Agent Teams Hybrid Mode)..."
-    echo "  Agent Teams: ENABLED (experimental)"
+    echo "Launching Ensemble..."
+    echo "  Agent Teams Mode: available (for research/review tasks)"
 else
     echo "Launching Ensemble..."
-    echo "  Agent Teams: disabled (set CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 to enable)"
+    echo "  Agent Teams Mode: disabled (set CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 to enable)"
 fi
 
 # ログディレクトリ作成
@@ -184,9 +184,9 @@ echo ""
 echo "Add workers: ./scripts/pane-setup.sh [count]"
 echo ""
 if [ "$AGENT_TEAMS_MODE" = "1" ]; then
-    echo "=== Agent Teams Hybrid Mode ==="
-    echo "  Pattern D is available for parallel tasks."
-    echo "  Conductor can use TeamCreate/SendMessage for worker coordination."
-    echo "  Fallback to Pattern B (tmux) is always available."
+    echo "=== Agent Teams Mode ==="
+    echo "  Available for research/review tasks (not for code implementation)."
+    echo "  Conductor acts as Team Lead for investigation/review teams."
+    echo "  Use Pattern A/B/C for actual code implementation."
     echo ""
 fi

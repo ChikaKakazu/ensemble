@@ -1,132 +1,109 @@
-# Agent Teams Hybrid Workflow
-# パターンD: Claude Code公式Agent Teams + Ensemble計画・レビュー層
+# Agent Teams Mode (T) Workflow
+# 調査・レビュー・設計探索専用ワークフロー
 #
 # 前提条件:
 #   CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 が設定されていること
 #
 # 特徴:
-#   - チーム作成・タスク分配は自然言語で指示
-#   - 通信はAgent Teams自動配信（message/broadcast）
-#   - タスク管理は共有タスクリスト（~/.claude/tasks/{team-name}/）
-#   - 完了検知はTeammateIdle/TaskCompletedフック
-#   - 計画・レビュー・改善はEnsemble独自
-#   - 従来のpane-setup.sh / send-keys不要
+#   - Conductorが自然言語でAgent Teamsを直接操作
+#   - Dispatch不要、queue不要、send-keys不要
+#   - 調査・レビュー・設計探索に特化（コード実装はパターンA/B/C）
+#
+# 適用ユースケース:
+#   1. 並列コードレビュー（複数観点）
+#   2. 競合仮説によるデバッグ調査
+#   3. 技術調査・リサーチ
+#   4. 新モジュール/機能の設計検討
+#   5. クロスレイヤー変更の計画
 
-name: agent-teams
-description: "Agent Teams ハイブリッドワークフロー（実験的）"
+name: agent-teams-mode
+description: "Agent Teamsモード - 調査・レビュー専用（実験的）"
 cost_level: medium
-pattern: D
+mode: T  # パターンではなくモード
 
 # フェーズ定義
 phases:
-  # Phase 1: 計画（Ensemble独自）
+  # Phase 1: 計画・判定
   plan:
     agent: conductor
     model: opus
     actions:
       - analyze_task
-      - decompose_subtasks
-      - select_workflow
+      - determine_mode:  # モードT判定
+          conditions:
+            - task_type: research_or_review  # 調査・レビュー系
+            - requires_multiple_perspectives: true  # 複数観点必要
+            - worker_communication: required  # ワーカー間通信必要
       - user_approval
 
-  # Phase 2: チーム作成（Agent Teams - 自然言語ベース）
+  # Phase 2: チーム作成
   team_setup:
     method: natural_language
+    actor: conductor  # Conductorが直接操作
     actions:
       - team_creation:
           # 自然言語で指示
-          instruction: >
-            Create an agent team named "ensemble-{task_id}" with {worker_count} teammates.
-            Each teammate should be based on the worker agent definition in .claude/agents/worker.md.
+          instruction_template: >
+            Create an agent team to {task_description}.
+            Spawn {teammate_count} teammates with the following roles: {roles}.
             Use Sonnet model for all teammates.
       - enable_delegate_mode:
           # Shift+Tab で有効化
-          method: keyboard_shortcut  # Shift+Tab
-          effect: restrict_lead_to_coordination  # Conductor = 調整専用
+          method: keyboard_shortcut
+          effect: restrict_conductor_to_coordination
       - assign_tasks:
           # 各teammateに自然言語で指示
-          method: natural_language  # "Implement X in src/..." 形式
-          require_plan_approval: true  # 実装前に計画承認を要求
+          method: natural_language
+          encourage_discussion: true  # メイト間議論を推奨
 
-  # Phase 3: 実行監視（Agent Teams）
-  execute:
-    method: agent_teams_execution
+  # Phase 3: 実行監視
+  execution:
+    method: agent_teams_direct
+    actor: conductor  # Conductorが監視
     actions:
-      - teammate_work:
-          # 各teammateが独立して作業
-          task_source: shared_task_list  # ~/.claude/tasks/{team-name}/
-          file_locking: enabled  # 競合防止
       - monitor_progress:
           # 共有タスクリストを監視
-          poll_interval: 30  # 30秒ごとにチェック
+          source: shared_task_list  # ~/.claude/tasks/{team-name}/
+          poll_interval: 60  # 1分ごと
           timeout: 1800  # 30分
-      - completion_detection:
-          # 完了検知
-          hooks:
-            - teammate_idle  # メイトアイドル時
-            - task_completed  # タスク完了マーク時
+      - check_in:
+          # 定期的にチェックイン
+          frequency: 5_minutes
+          redirect_if_stuck: true
 
-  # Phase 4: レビュー（Ensemble独自 + Agent Teams Hooks統合）
-  review:
-    triggers:
-      - on_teammate_idle:  # TeammateIdleフック
-          action: run_reviewer
-      - on_task_completed:  # TaskCompletedフック
-          action: run_security_reviewer
-    parallel:
-      - agent: reviewer
-        model: sonnet
-        focus: architecture
-        gate:
-          on_failure: send_feedback  # exit code 2でフィードバック送信
-      - agent: security-reviewer
-        model: sonnet
-        focus: security
-        gate:
-          on_failure: reject_completion  # exit code 2で完了拒否
-    merge_strategy: all_approved
-
-  # Phase 5: 修正ループ（必要な場合）
-  fix_loop:
-    max_iterations: 3
-    trigger: any_needs_fix
+  # Phase 4: 結果統合
+  synthesis:
+    actor: conductor
     actions:
-      - send_fix_instructions:
-          # 自然言語で修正指示（message または broadcast）
-          method: natural_language
-      - wait_fix_completion:
-          # TeammateIdle/TaskCompletedフックで再検知
-          detection: hooks
-      - re_review:
-          # レビューを再実行
-          repeat: review_phase
+      - collect_results:
+          # 各メイトの結果を収集
+          method: natural_language  # "Summarize your findings"
+      - resolve_conflicts:
+          # 矛盾があれば調整
+          method: re_investigation  # 再調査を指示
+      - create_report:
+          # 最終レポート作成
+          format: markdown
+          include:
+            - summary
+            - each_perspective
+            - recommendations
 
-  # Phase 6: クリーンアップ
-  cleanup:
+  # Phase 5: 報告
+  report:
+    actor: conductor
     actions:
-      - team_shutdown:
-          # 自然言語で指示: "Clean up the team"
+      - present_to_user:
+          # ユーザーに報告
+          format: structured_report
+      - team_cleanup:
+          # チームをクリーンアップ
           method: natural_language
           instruction: "Clean up the team"
-      - dashboard_update:
-          # ダッシュボード最終更新
-          file: status/dashboard.md
-      - completion_report:
-          # 完了報告作成
-          file: queue/reports/completion-summary.yaml
-
-  # Phase 7: 自己改善（Ensemble独自）
-  improve:
-    agent: learner
-    model: sonnet
-    actions:
-      - analyze_execution
-      - detect_issues
-      - propose_memory_update  # MEMORY.md更新提案
 
 # フォールバック設定
 fallback:
-  on_error: pattern_b  # Agent Teams障害時はパターンBにフォールバック
+  on_error: sequential_investigation  # Agent Teams障害時は順次実行
   conditions:
     - agent_teams_unavailable
     - team_create_failed
@@ -135,12 +112,9 @@ fallback:
     - team_shutdown  # "Clean up the team" を実行
     - record_failure  # MEMORY.md更新用に記録
 
-# Agent Teams設定
-agent_teams_config:
-  teammate_mode: tmux  # Ensembleはtmux推奨（auto/in-process/tmux）
+# モードT設定
+mode_t_config:
+  teammate_mode: tmux  # Ensembleはtmux推奨
   shared_task_list_path: ~/.claude/tasks/{team_name}/
-  hooks:
-    teammate_idle: .claude/hooks/TeammateIdle
-    task_completed: .claude/hooks/TaskCompleted
   delegate_mode: enabled  # Conductor = 調整専用
-  plan_approval: required  # 実装前に計画承認
+  max_duration: 1800  # 30分

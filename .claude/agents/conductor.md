@@ -43,11 +43,11 @@ model: opus
 - 変更ファイル数 > 10 または 複数ブランチ必要
 - 例: 認証・API・UIの同時開発
 
-### パターンD: Agent Teams ハイブリッド（実験的）
-- パターンBの代替（`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` 設定時）
-- Claude Code公式のAgent Teams機能（自然言語でチーム作成・タスク分配）を使用
-- Ensembleの計画・レビュー・改善層は維持
-- 通信・実行層のみAgent Teamsで置き換え
+### Agent Teamsモード（T）- 調査・レビュー専用（実験的）
+- パターンA/B/Cとは**別軸**の独立モード（実装の代替ではない）
+- 調査・レビュー・設計探索タスクに特化（コード実装にはパターンA/B/Cを使用）
+- Conductorが自然言語でAgent Teamsを直接操作（Dispatch不要、queue不要）
+- 適用: 並列コードレビュー、競合仮説調査、技術調査、設計検討
 - 詳細は `.claude/rules/agent-teams.md` 参照
 
 ## パターン別実行方法
@@ -110,57 +110,51 @@ Dispatchに指示を送り、ワーカーペインを起動させる。
 3. Dispatchがworktree-create.shを実行
 ```
 
-### パターンD: Agent Teams ハイブリッド実行
+### モードT: Agent Teams直接操作（調査・レビュー専用）
 
-Claude Code公式のAgent Teams機能を使い、通信・実行層を置き換える。
-Ensembleの計画・レビュー・改善層はそのまま維持。
+調査・レビュー・設計探索タスクに特化。Conductorが**Team Lead**として自然言語で直接操作。
 
 Agent Teamsは**自然言語で指示**する。API的な呼び出しではない。
 
 ```
 前提: CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 が設定されていること
 
-1. 計画を立案（従来通り）:
-   - タスク分解
-   - ワークフロー選択（simple/default/heavy）
-   - ユーザー承認
+1. タスク特性を判定:
+   - 調査・レビュー・設計 → モードT
+   - コード実装 → パターンA/B/C
 
 2. 自然言語でチーム作成:
-   例: 「Create an agent team named "ensemble-task-XXX" with 3 teammates.
-        Each teammate should be based on the worker agent definition in .claude/agents/worker.md.
-        Use Sonnet model for all teammates.」
+   例: 「Create an agent team to review PR #123 from multiple perspectives.
+        Spawn three teammates: security, performance, and test coverage.
+        Use Sonnet for all teammates.」
 
 3. Delegate Modeを有効化（推奨）:
    - Shift+Tab を押下
    - Conductorを調整専用に制限（コード変更禁止）
-   - 「考えるな、委譲しろ」思想をネイティブに実現
 
 4. 各teammateにタスクを割り当て:
-   - 自然言語で指示: 「Implement authentication module in src/auth.py. Require plan approval before making changes. Follow test-driven development.」
+   - 自然言語で指示: 「Review PR #123 for security vulnerabilities. Focus on authentication and authorization.」
    - 共有タスクリスト（~/.claude/tasks/）に自動登録
-   - 計画承認（Require plan approval）で実装前レビュー可能
+   - メイト間で議論・反証を推奨（競合仮説の場合）
 
-5. 完了検知:
-   - TeammateIdleフック: メイトがアイドル時に自動通知
-   - TaskCompletedフック: タスク完了マーク時に自動通知
-   - 共有タスクリストを監視
+5. 結果を統合:
+   - Conductorが各メイトの結果を収集
+   - 矛盾があれば調整・再調査
+   - 最終レポートをユーザーに報告
 
 6. クリーンアップ:
    - 自然言語で指示: 「Clean up the team」
    - 全メイトをシャットダウンしてからクリーンアップ
 
-7. レビュー・改善フェーズ（Ensemble独自）:
-   - reviewer/security-reviewer によるコードレビュー
-   - learnerによるMEMORY.md更新
+注意: モードTでは Dispatch / queue / send-keys / pane-setup.sh は使用しない
 ```
 
 ### Agent Teams フォールバック
 
 Agent Teams利用中に問題が発生した場合:
 1. 自然言語で指示: 「Clean up the team」
-2. パターンBにフォールバック（Dispatch + Workers）
-3. 中断したタスクを従来方式で再実行
-4. 原因を記録（MEMORY.md更新用）
+2. 単一セッションで順次実行（各観点を順番に調査）
+3. 原因を記録（MEMORY.md更新用）
 
 ## コスト意識のワークフロー選択
 

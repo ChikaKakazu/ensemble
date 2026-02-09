@@ -43,12 +43,19 @@ model: opus
 - 変更ファイル数 > 10 または 複数ブランチ必要
 - 例: 認証・API・UIの同時開発
 
-### パターンD: Agent Teams ハイブリッド（実験的）
-- パターンBの代替（`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` 設定時）
-- Claude Code公式のAgent Teams機能（自然言語でチーム作成・タスク分配）を使用
-- Ensembleの計画・レビュー・改善層は維持
-- 通信・実行層のみAgent Teamsで置き換え
-- 詳細は `.claude/rules/agent-teams.md` 参照
+## Agent Teamsモード（T: 調査・レビュー専用）
+
+**注意**: Agent Teamsは実装パターン（A/B/C）とは**別軸**のモード。
+コード実装には使わず、調査・レビュー・計画策定などの「判断」タスクに特化。
+
+### 判定基準
+- 調査タスク（技術選定、ライブラリ比較、アーキテクチャ検討）
+- レビュータスク（PR並列レビュー、セキュリティ監査）
+- 計画策定（複数の視点から計画を練る）
+- `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` 設定が必要
+
+### 実装タスクには使わない
+コード実装にはパターンA/B/Cを使用。Agent Teamsは「判断」に特化。
 
 ## パターン別実行方法
 
@@ -110,39 +117,33 @@ Dispatchに指示を送り、ワーカーペインを起動させる。
 3. Dispatchがworktree-create.shを実行
 ```
 
-### パターンD: Agent Teams ハイブリッド実行
+### Agent Teamsモード実行方法（調査・レビュー専用）
 
-Claude Code公式のAgent Teams機能を使い、通信・実行層を置き換える。
-Ensembleの計画・レビュー・改善層はそのまま維持。
+ConductorがTeam Leadとして直接操作。Dispatch/queue不要。
 
 ```
 前提: CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 が設定されていること
 
-1. 自然言語でチーム作成を指示:
-   「ensemble-{task-id}というチームを作成して、N人のteammateをspawnし、
-    各タスクを共有タスクリストで管理してください」
+1. 自然言語でチーム作成:
+   「Create an agent team to research X technology.
+    Spawn 3 teammates to investigate different aspects.」
 
-2. Delegate Modeを有効化（Shift+Tab）:
-   Conductorを調整専用にし、実装はteammateに委譲
+2. Delegate Modeを有効化（推奨）:
+   Conductorを調整専用にする
 
 3. タスクをmessage/broadcastで分配:
-   各teammateに個別にタスクを割り当て
+   各teammateに調査・レビュータスクを割り当て
 
-4. TeammateIdleフック + 共有タスクリストで完了検知:
-   自動的にタスク完了を検知
+4. 完了検知:
+   TeammateIdleフック + 共有タスクリストで自動検知
 
-5. チーム削除を指示:
-   「チームを削除してください」
+5. チーム削除:
+   「Clean up the team」
 
-6. レビュー・改善は従来通り（Ensemble独自プロトコル）
+6. 結果を統合して計画/レビュー報告に反映
 ```
 
-**注意**: Agent Teamsでは「自然言語での指示」が基本。API呼び出しではない。
-Conductorは Team Lead として動作し、Delegate Modeで調整専用になる。
-
-### Agent Teams フォールバック
-
-問題発生時はパターンBにフォールバック。
+**重要**: Agent Teamsは「調査・レビュー」専用。コード実装にはパターンA/B/Cを使用。
 
 ## コスト意識のワークフロー選択
 
