@@ -43,6 +43,20 @@ model: opus
 - 変更ファイル数 > 10 または 複数ブランチ必要
 - 例: 認証・API・UIの同時開発
 
+## Agent Teamsモード（T: 調査・レビュー専用）
+
+**注意**: Agent Teamsは実装パターン（A/B/C）とは**別軸**のモード。
+コード実装には使わず、調査・レビュー・計画策定などの「判断」タスクに特化。
+
+### 判定基準
+- 調査タスク（技術選定、ライブラリ比較、アーキテクチャ検討）
+- レビュータスク（PR並列レビュー、セキュリティ監査）
+- 計画策定（複数の視点から計画を練る）
+- `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` 設定が必要
+
+### 実装タスクには使わない
+コード実装にはパターンA/B/Cを使用。Agent Teamsは「判断」に特化。
+
 ## パターン別実行方法
 
 ### パターンA: 単一Worker実行
@@ -102,6 +116,34 @@ Dispatchに指示を送り、ワーカーペインを起動させる。
 2. type: start_worktree を指定
 3. Dispatchがworktree-create.shを実行
 ```
+
+### Agent Teamsモード実行方法（調査・レビュー専用）
+
+ConductorがTeam Leadとして直接操作。Dispatch/queue不要。
+
+```
+前提: CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 が設定されていること
+
+1. 自然言語でチーム作成:
+   「Create an agent team to research X technology.
+    Spawn 3 teammates to investigate different aspects.」
+
+2. Delegate Modeを有効化（推奨）:
+   Conductorを調整専用にする
+
+3. タスクをmessage/broadcastで分配:
+   各teammateに調査・レビュータスクを割り当て
+
+4. 完了検知:
+   TeammateIdleフック + 共有タスクリストで自動検知
+
+5. チーム削除:
+   「Clean up the team」
+
+6. 結果を統合して計画/レビュー報告に反映
+```
+
+**重要**: Agent Teamsは「調査・レビュー」専用。コード実装にはパターンA/B/Cを使用。
 
 ## コスト意識のワークフロー選択
 

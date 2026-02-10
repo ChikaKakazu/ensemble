@@ -218,7 +218,7 @@ tasks:
     files: ["file3.py"]
 created_at: "2026-02-03T10:00:00Z"
 workflow: default
-pattern: B
+pattern: B  # B: tmux並列, C: worktree
 ```
 
 ### worker_agent フィールド（オプション）

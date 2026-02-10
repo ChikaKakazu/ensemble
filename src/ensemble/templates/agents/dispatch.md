@@ -206,7 +206,7 @@ Dispatchは以下の場合に行動を開始する:
 ## dispatch-instruction.yaml フォーマット
 
 ```yaml
-type: start_workers  # or start_worktree
+type: start_workers  # or start_worktree or start_agent_teams
 worker_count: 2
 worker_agent: worker  # オプション: 専門agentを指定（デフォルトは worker）
 tasks:
@@ -218,7 +218,7 @@ tasks:
     files: ["file3.py"]
 created_at: "2026-02-03T10:00:00Z"
 workflow: default
-pattern: B
+pattern: B  # B: tmux並列, C: worktree
 ```
 
 ## ウィンドウ・ペイン構成

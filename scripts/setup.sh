@@ -84,20 +84,33 @@ else
     echo "CLAUDE.md already exists, skipping..."
 fi
 
-# 3.5. Create LEARNED.md (only if it doesn't exist)
-if [ ! -f LEARNED.md ]; then
-    echo "Creating LEARNED.md..."
-    cat > LEARNED.md << 'LEARNEDEOF'
-# 学習済みルール（自動追記）
+# 3.5. Create MEMORY.md (Claude Code auto-memory integration)
+if [ ! -f MEMORY.md ]; then
+    echo "Creating MEMORY.md..."
+    cat > MEMORY.md << 'MEMORYEOF'
+# Ensemble Learning Memory
 
-<!-- learner agentが自動追記するセクション -->
+Claude Code の自動メモリ機能と統合。
+このファイルは毎ターン自動的にシステムプロンプトに注入される（200行制限）。
+詳細なトピックは memory/ ディレクトリ配下にファイルを作成する。
 
-このファイルは、Ensembleのlearnerエージェントが自動的に更新します。
-タスク実行から学んだパターン、ガイドライン、改善点が記録されます。
+## プロジェクト情報
+- Ensemble AIオーケストレーションシステム
+- /go でタスク実行、/go-light で軽量ワークフロー
 
-LEARNEDEOF
+## 学習済みルール
+<!-- learner agentがタスク完了後に追記 -->
+
+MEMORYEOF
+    mkdir -p memory
 else
-    echo "LEARNED.md already exists, skipping..."
+    echo "MEMORY.md already exists, skipping..."
+fi
+
+# Migrate LEARNED.md to MEMORY.md if exists
+if [ -f LEARNED.md ] && [ -f MEMORY.md ]; then
+    echo "Note: LEARNED.md found. Consider migrating contents to MEMORY.md."
+    echo "  LEARNED.md is the legacy format. MEMORY.md is the new Claude Code auto-memory."
 fi
 
 # 4. Create dashboard.md
