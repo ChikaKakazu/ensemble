@@ -77,6 +77,21 @@ echo "  Conductor pane: $CONDUCTOR_PANE"
 DASHBOARD_PANE=$(tmux split-window -h -t "$CONDUCTOR_PANE" -c "$PROJECT_DIR" -l 40% -P -F '#{pane_id}')
 echo "  Dashboard pane: $DASHBOARD_PANE"
 
+# 初期モード表示ファイルの作成
+mkdir -p "$PROJECT_DIR/.ensemble/status"
+if [ -f "$PROJECT_DIR/scripts/update-mode.sh" ]; then
+    bash "$PROJECT_DIR/scripts/update-mode.sh" idle waiting
+else
+    # フォールバック: シンプルなIDLE表示
+    cat > "$PROJECT_DIR/.ensemble/status/mode.md" << 'MODEEOF'
+╔══════════════════════════════════════╗
+║  💤 EXECUTION MODE                   ║
+╠══════════════════════════════════════╣
+║  Mode: IDLE     Status: ○ Waiting   ║
+╚══════════════════════════════════════╝
+MODEEOF
+fi
+
 # シェルの初期化を待つ
 sleep 2
 
@@ -89,6 +104,15 @@ tmux send-keys -t "$CONDUCTOR_PANE" \
 echo "Starting Dashboard monitor (in conductor session)..."
 tmux send-keys -t "$DASHBOARD_PANE" \
     "less +F .ensemble/status/dashboard.md" C-m
+
+# dashboardペインを上下に分割（上60%: dashboard、下40%: mode-viz）
+MODE_VIZ_PANE=$(tmux split-window -v -t "$DASHBOARD_PANE" -c "$PROJECT_DIR" -l 40% -P -F '#{pane_id}')
+echo "  Mode visualizer pane: $MODE_VIZ_PANE"
+
+# mode-viz用: update-mode.shの出力を定期表示
+echo "Starting Mode Visualizer..."
+tmux send-keys -t "$MODE_VIZ_PANE" \
+    "watch -n 3 -t cat .ensemble/status/mode.md" C-m
 
 # conductorペインを選択
 tmux select-pane -t "$CONDUCTOR_PANE"
@@ -143,6 +167,7 @@ WORKERS_SESSION=$SESSION_WORKERS
 CONDUCTOR_PANE=$CONDUCTOR_PANE
 DISPATCH_PANE=$DISPATCH_PANE
 DASHBOARD_PANE=$DASHBOARD_PANE
+MODE_VIZ_PANE=$MODE_VIZ_PANE
 WORKER_AREA_PANE=$WORKER_AREA_PANE
 
 # Agent Teams mode
@@ -163,7 +188,9 @@ echo "Two separate tmux sessions created!"
 echo ""
 echo "Session 1: $SESSION_CONDUCTOR"
 echo "  +------------------+------------------+"
-echo "  |   Conductor      |   dashboard      |"
+echo "  |                  |   dashboard      |"
+echo "  |   Conductor      +------------------+"
+echo "  |                  |   mode-viz       |"
 echo "  +------------------+------------------+"
 echo ""
 echo "Session 2: $SESSION_WORKERS"

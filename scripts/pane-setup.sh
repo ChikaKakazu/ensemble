@@ -187,3 +187,12 @@ tmux list-panes -t "$WORKERS_SESSION:main" -F "  #{pane_id}: #{pane_width}x#{pan
 echo ""
 echo "Switch to workers window: tmux attach -t $WORKERS_SESSION"
 echo ""
+
+# ワーカー起動完了後にモード表示を更新
+if [ -f "$PROJECT_DIR/scripts/update-mode.sh" ]; then
+    if [ "$WORKER_COUNT" -eq 1 ]; then
+        "$PROJECT_DIR/scripts/update-mode.sh" A active --workers 1 --workflow simple --tasks-total 0 --tasks-done 0
+    else
+        "$PROJECT_DIR/scripts/update-mode.sh" B active --workers "$WORKER_COUNT" --workflow default --tasks-total 0 --tasks-done 0
+    fi
+fi

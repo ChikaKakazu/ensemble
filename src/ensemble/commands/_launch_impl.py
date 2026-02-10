@@ -93,7 +93,9 @@ def run_launch(session: str = "ensemble", attach: bool = True) -> None:
     click.echo("")
     click.echo(f"Session 1: {conductor_session}")
     click.echo("  +------------------+------------------+")
-    click.echo("  |   Conductor      |   dashboard      |")
+    click.echo("  |                  |   dashboard      |")
+    click.echo("  |   Conductor      +------------------+")
+    click.echo("  |                  |   mode-viz       |")
     click.echo("  +------------------+------------------+")
     click.echo("")
     click.echo(f"Session 2: {workers_session}")
@@ -178,7 +180,7 @@ def _resolve_agent_paths(project_root: Path) -> dict[str, Path]:
 def _create_sessions(session: str, project_root: Path, agents: dict[str, Path]) -> None:
     """Create two separate tmux sessions for Ensemble.
 
-    Session 1 ({session}-conductor): Conductor (left 60%) + Dashboard (right 40%)
+    Session 1 ({session}-conductor): Conductor (left 60%) + Dashboard (top 24% of screen) + Mode-viz (bottom 16% of screen)
     Session 2 ({session}-workers): Dispatch (left 60%) + Worker area (right 40%)
 
     This allows viewing both sessions simultaneously in separate terminal windows.
@@ -197,6 +199,23 @@ def _create_sessions(session: str, project_root: Path, agents: dict[str, Path]) 
         ],
         check=True,
     )
+
+    # Create initial mode.md file
+    status_dir = project_root / ".ensemble" / "status"
+    status_dir.mkdir(parents=True, exist_ok=True)
+    update_mode_script = project_root / "scripts" / "update-mode.sh"
+    if update_mode_script.exists():
+        subprocess.run(["bash", str(update_mode_script), "idle", "waiting"], check=False)
+    else:
+        # Fallback: simple IDLE display
+        mode_md = status_dir / "mode.md"
+        mode_md.write_text(
+            "╔══════════════════════════════════════╗\n"
+            "║  💤 EXECUTION MODE                   ║\n"
+            "╠══════════════════════════════════════╣\n"
+            "║  Mode: IDLE     Status: ○ Waiting   ║\n"
+            "╚══════════════════════════════════════╝\n"
+        )
 
     # Split conductor window: left/right (60/40)
     subprocess.run(
@@ -233,6 +252,27 @@ def _create_sessions(session: str, project_root: Path, agents: dict[str, Path]) 
     time.sleep(1)
     subprocess.run(
         ["tmux", "send-keys", "-t", f"{conductor_session}:main.1", "Enter"],
+        check=True,
+    )
+
+    # Split dashboard pane vertically (60/40) for mode visualizer
+    subprocess.run(
+        ["tmux", "split-window", "-t", f"{conductor_session}:main.1", "-v", "-l", "40%", "-c", str(project_root)],
+        check=True,
+    )
+
+    # Set pane title for mode-viz
+    subprocess.run(["tmux", "select-pane", "-t", f"{conductor_session}:main.2", "-T", "mode-viz"], check=True)
+
+    # Start mode visualizer in mode-viz pane
+    mode_path = project_root / ".ensemble" / "status" / "mode.md"
+    subprocess.run(
+        ["tmux", "send-keys", "-t", f"{conductor_session}:main.2", f"watch -n 3 -t cat {mode_path}"],
+        check=True,
+    )
+    time.sleep(1)
+    subprocess.run(
+        ["tmux", "send-keys", "-t", f"{conductor_session}:main.2", "Enter"],
         check=True,
     )
 
@@ -331,6 +371,7 @@ def _save_pane_ids(session: str, ensemble_dir: Path) -> None:
         f.write("# Pane IDs (use these with tmux send-keys -t)\n")
         f.write(f"CONDUCTOR_PANE={conductor_pane_map.get(0, '%0')}\n")
         f.write(f"DASHBOARD_PANE={conductor_pane_map.get(1, '%1')}\n")
+        f.write(f"MODE_VIZ_PANE={conductor_pane_map.get(2, '%2')}\n")
         f.write(f"DISPATCH_PANE={workers_pane_map.get(0, '%0')}\n")
         f.write(f"WORKER_AREA_PANE={workers_pane_map.get(1, '%1')}\n")
         f.write("\n")
