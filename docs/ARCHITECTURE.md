@@ -210,6 +210,7 @@ tmux attach -t ensemble-workers
 | **A: subagent直接** | ファイル数 ≤ 3、単純タスク | Dispatch経由で単一Worker | typo修正、単一ファイル修正 |
 | **B: tmux並列** | ファイル数 4〜10、並列可能 | 複数Workerペインで並列実行 | 複数エンドポイント実装 |
 | **C: worktree分離** | ファイル数 > 10、独立機能 | git worktreeで完全分離 | 認証・API・UIの同時開発 |
+| **T: Agent Teams** | 調査・レビュー・設計タスク | Agent Teams並列調査 | 並列コードレビュー、技術調査 |
 
 ### 4.2 パターンB: tmux並列実行
 
@@ -233,6 +234,76 @@ tmux attach -t ensemble-workers
 4. 全worktree完了後、integratorがマージ
 5. 相互レビュー（自分以外の変更をレビュー）
 ```
+
+### 4.4 モードT: Agent Teams（調査・レビュー専用）
+
+Claude Code公式のAgent Teams機能を活用した並列調査・レビューモード。
+コード実装ではなく、調査・レビュー・設計探索に特化。
+
+#### 特徴
+
+- **Conductor直接操作**: Dispatchやqueueは不要
+- **並列調査**: 複数のteammateが独立して調査・レビュー
+- **結果統合**: Conductorが各メイトの結果を収集・矛盾解消
+- **議論機能**: メイト間でメッセージ交換（競合仮説の場合）
+
+#### 適用ユースケース
+
+| ユースケース | 説明 | 例 |
+|-------------|------|-----|
+| 並列コードレビュー | 複数観点での同時レビュー | セキュリティ/パフォーマンス/テストカバレッジ |
+| 競合仮説によるデバッグ調査 | 異なる仮説を並列検証 | 原因A説 vs 原因B説を並列調査 |
+| 技術調査・リサーチ | 複数技術/ライブラリの並列評価 | React vs Vue vs Svelte比較 |
+| 新モジュール/機能の設計検討 | 異なるアプローチの並列探索 | 設計案A vs 設計案B vs 設計案C |
+| クロスレイヤー変更の計画 | 観点別計画策定 | フロント/バック/テスト観点別 |
+
+#### 実行フロー
+
+```
+1. Conductorがタスク種別を分析
+   - 調査・レビュー系と判定 → モードT選択
+
+2. 自然言語でチーム作成:
+   「Create an agent team to review PR #123 from multiple perspectives.
+    Spawn three teammates: security, performance, and test coverage.
+    Use Sonnet for all teammates.」
+
+3. Delegate Modeを有効化（推奨）:
+   - Shift+Tab押下
+   - Conductorを調整専用に制限（コード変更禁止）
+
+4. 各teammateにタスクを割り当て:
+   - 自然言語で指示
+   - 共有タスクリスト（~/.claude/tasks/）に自動登録
+
+5. Teammatesが独立作業:
+   - 各teammateが異なる観点で調査・レビュー
+   - 必要に応じてメイト間でメッセージ交換
+
+6. 結果を統合:
+   - Conductorが各メイトの結果を収集
+   - 矛盾があれば調整・再調査
+   - 最終レポートを作成
+
+7. クリーンアップ:
+   - 「Clean up the team」で終了
+```
+
+#### 使わないEnsembleコンポーネント
+
+Agent TeamsはConductor直接操作のため、以下は不要:
+
+- ❌ Dispatch（不要）
+- ❌ queue/ディレクトリ（不要）
+- ❌ send-keys通知（不要）
+- ❌ pane-setup.sh（不要）
+- ❌ ACKファイル（不要）
+- ❌ completion-summary.yaml（不要）
+
+#### コード実装には使わない
+
+**重要**: モードTは調査・レビュー・設計探索専用。
+コード実装タスクにはパターンA/B/Cを使用。
 
 ---
 
@@ -277,6 +348,27 @@ steps:
      - arch-review      → アーキテクチャレビュー
      - security-review  → セキュリティレビュー
   4. improve     → 自己改善フェーズ（learner）
+```
+
+### 5.4 ループ検知
+無限ループを防ぐため、2種類のループ検知機構を導入:
+
+#### LoopDetector
+- 同一タスクの繰り返し回数を記録
+- デフォルト閾値: 5回
+- 超過時にLoopDetectedErrorを発生
+
+#### CycleDetector
+- レビュー→修正→レビューのサイクルを検知
+- デフォルト閾値: 3サイクル
+- 超過時にConductorにエスカレーション
+
+```python
+from ensemble.loop_detector import LoopDetector
+
+detector = LoopDetector(max_iterations=5)
+if detector.record(task_id):
+    raise LoopDetectedError(f"Task {task_id} exceeded max iterations")
 ```
 
 ---
@@ -361,6 +453,31 @@ task_summary:
   - task_id: task-002
     worker: worker-2
     status: completed
+```
+
+### 6.3 タスク依存関係
+`blocked_by`フィールドで順序依存タスクを管理:
+
+```yaml
+id: task-002
+instruction: "APIテストを作成"
+files: ["tests/test_api.py"]
+blocked_by:
+  - task-001  # task-001完了後に実行可能
+workflow: default
+```
+
+#### DependencyResolver
+- タスクグラフを構築し、依存解決済みタスクをフィルタリング
+- 循環依存を検知（DFS）
+- 完了時に自動的に依存タスクを解放
+
+```python
+from ensemble.dependency import DependencyResolver
+
+resolver = DependencyResolver(tasks)
+ready_tasks = resolver.get_ready_tasks()  # 実行可能タスク
+resolver.mark_completed(task_id)  # 完了マーク
 ```
 
 ---
@@ -468,6 +585,45 @@ tmux send-keys -t "$WORKER_1_PANE" Enter
 - 同一ファイル群の連続タスク
 - Workerのコンテキストがまだ軽量（タスク2件目以内）
 
+### 7.5 イベント駆動通信
+send-keys通知（プライマリ）+ ポーリング（フォールバック）のハイブリッド方式:
+
+#### inbox_watcher.sh
+- inotifywaitでqueue/reports/を監視
+- ファイル作成を検知したら即座にsend-keys通知
+- 通知失敗時はポーリングで補完
+
+#### flock排他制御
+- `atomic_write_with_lock()`でYAML破損を防止
+- fcntl.flockによる排他ロック（5秒タイムアウト）
+- 3回リトライ
+
+#### 3段階自動エスカレーション
+- Phase 1 (0-2分): 通常nudge
+- Phase 2 (2-4分): Escape×2 + C-c + nudge
+- Phase 3 (4分+): /clear送信（5分に1回まで）
+
+### 7.6 NDJSONセッションログ
+全実行履歴を.ensemble/logs/session-{timestamp}.ndjsonに記録:
+
+```json
+{"timestamp": "2026-02-11T10:00:00Z", "event": "task_start", "task_id": "task-001", "worker_id": 1}
+{"timestamp": "2026-02-11T10:05:00Z", "event": "task_complete", "task_id": "task-001", "status": "success"}
+```
+
+#### イベントタイプ
+- task_start, task_complete, worker_assign
+- review_result, escalation, loop_detected
+
+#### 分析例
+```bash
+# タスク完了数をカウント
+jq -s 'map(select(.event == "task_complete")) | length' session-*.ndjson
+
+# 失敗タスクを抽出
+jq -s 'map(select(.event == "task_complete" and .status == "failed"))' session-*.ndjson
+```
+
 ---
 
 ## 8. コマンド一覧
@@ -497,6 +653,68 @@ tmux send-keys -t "$WORKER_1_PANE" Enter
 | `/improve` | 手動で自己改善を実行 |
 | `/deploy` | バージョンアップ・PyPI公開を自動実行 |
 | `/clear` | Workerのコンテキストをクリア |
+
+### 8.3 Faceted Prompting
+エージェント定義を5つの関心に分離し、宣言的に合成:
+
+| 関心 | ディレクトリ | 内容 |
+|------|------------|------|
+| WHO | personas/ | 役割定義 |
+| RULES | policies/ | 禁止事項・品質基準 |
+| WHAT | instructions/ | 手順・フロー |
+| CONTEXT | knowledge/ | ドメイン知識 |
+| OUTPUT | output-contracts/ | レポートフォーマット |
+
+```python
+from ensemble.faceted import FacetedPromptComposer
+
+composer = FacetedPromptComposer()
+prompt = composer.compose("conductor")  # 各facetを合成
+```
+
+### 8.4 Progressive Disclosure Skills
+タスク種別に応じてWorkerにSkillsを動的注入:
+
+```yaml
+# dispatch-instruction.yaml
+worker_skills:
+  - "react-frontend"    # React/Next.js開発スキル
+  - "backend-api"       # API実装スキル
+  - "testing"           # テスト作成スキル
+```
+
+SkillManagerが該当スキルを読み込み、Workerに注入。
+
+### 8.5 CLIコマンド追加
+| コマンド | 説明 |
+|---------|------|
+| `ensemble pipeline` | CI/CDパイプラインモード（非対話） |
+
+### 8.6 Bloom's Taxonomy分類
+タスクの認知レベルに基づいてモデルを自動選択:
+
+| レベル | 説明 | モデル |
+|--------|------|--------|
+| L1 - Remember | 事実の想起、コピー | sonnet |
+| L2 - Understand | 説明、要約 | sonnet |
+| L3 - Apply | 手順の実行、実装 | sonnet |
+| L4 - Analyze | 比較、調査、分析 | opus |
+| L5 - Evaluate | 判断、批評、レビュー | opus |
+| L6 - Create | 設計、新しい解決策 | opus |
+
+```python
+from ensemble.bloom import classify_and_recommend
+
+result = classify_and_recommend("認証システムを設計")
+# => {"level": 6, "level_name": "CREATE", "recommended_model": "opus"}
+```
+
+### 8.7 Bottom-Up Skill Discovery
+Workerが繰り返し実行したパターンを検知し、スキル化候補として提案:
+
+- 同パターン3回検出でスキル候補として記録
+- learnerが候補を集約し、Conductorに提案
+- 承認後にskillテンプレートを自動生成
 
 ---
 

@@ -6,6 +6,7 @@ ACK（受領確認）機構
 
 from __future__ import annotations
 
+import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
@@ -84,3 +85,61 @@ class AckManager:
         """
         for ack_file in self.ack_dir.glob("*.ack"):
             ack_file.unlink()
+
+    def wait_with_escalation(
+        self,
+        task_id: str,
+        worker_id: int,
+        pane_id: str,
+        phase_timeout: float = 60.0,
+        max_phases: int = 3,
+    ) -> tuple[bool, int]:
+        """
+        3段階エスカレーション付きACK待機
+
+        Args:
+            task_id: タスクID
+            worker_id: ワーカー番号
+            pane_id: ワーカーのtmuxペインID
+            phase_timeout: 各フェーズのタイムアウト秒数
+            max_phases: 最大フェーズ数
+
+        Returns:
+            (ACK受信成否, 実行したフェーズ数)
+        """
+        # 最初の待機（Phase 0: エスカレーション前）
+        if self.wait(task_id, timeout=phase_timeout):
+            return (True, 0)
+
+        # 3段階エスカレーション
+        for phase in range(1, max_phases + 1):
+            # escalate.sh を実行
+            escalate_script = Path("src/ensemble/templates/scripts/escalate.sh")
+            if not escalate_script.exists():
+                # フォールバック: scripts/ ディレクトリも確認
+                escalate_script = Path("scripts/escalate.sh")
+
+            try:
+                subprocess.run(
+                    [str(escalate_script), pane_id, str(worker_id), str(phase)],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+            except subprocess.CalledProcessError as e:
+                print(
+                    f"Warning: escalate.sh failed for phase {phase}: {e.stderr}",
+                    flush=True,
+                )
+            except FileNotFoundError:
+                print(
+                    f"Warning: escalate.sh not found at {escalate_script}",
+                    flush=True,
+                )
+
+            # エスカレーション後、再度待機
+            if self.wait(task_id, timeout=phase_timeout):
+                return (True, phase)
+
+        # 全フェーズ失敗
+        return (False, max_phases)

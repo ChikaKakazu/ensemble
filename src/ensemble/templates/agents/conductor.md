@@ -254,9 +254,22 @@ Claude Max 5並列制限を考慮:
 |---------|--------|-----------|
 | `/go` または タスク依頼 | ユーザー | 計画立案・パターン選択・実行 |
 
-### 完了確認方法（ポーリング）
+### 完了確認方法（イベント駆動 - P0-1）
 
-Dispatchへの委譲後、以下のポーリング処理を実行:
+**inbox_watcher.sh による自動通知**:
+
+Dispatchへの委譲後は、inbox_watcher.shが自動的に完了を通知します:
+
+```
+1. Dispatchがcompletion-summary.yamlを作成
+2. inbox_watcher.shがinotifywaitでファイル作成を検知（0ms）
+3. Conductorペインに自動的にsend-keys通知
+4. Conductorが即座に完了処理を開始
+```
+
+**従来のポーリング（フォールバック）**:
+
+inbox_watcher.shが利用できない環境では、ポーリングで完了を検知:
 
 ```bash
 # 完了・エスカレーション待機ループ（30秒間隔、最大30分）
@@ -284,7 +297,7 @@ done
 2. 問題を分析し、修正方針を決定
 3. 修正実施後、Dispatchに再開指示を送信
 4. エスカレーションYAMLを削除
-5. ポーリングを再開（完了待機に戻る）
+5. 待機を再開（inbox_watcher.shまたはポーリング）
 
 ## 自律判断チェックリスト
 
@@ -344,6 +357,72 @@ source .ensemble/panes.env
 tmux send-keys -t "$CONDUCTOR_PANE" 'message' Enter
 tmux send-keys -t "$DISPATCH_PANE" 'message' Enter
 ```
+
+## ループ検知（P1-1）
+
+**LoopDetector**: 同一タスクの繰り返し実行を検知
+
+```python
+from ensemble.loop_detector import LoopDetector, LoopDetectedError
+from ensemble.workflow import check_loop
+
+loop_detector = LoopDetector(max_iterations=5)
+try:
+    check_loop("task-001", loop_detector)
+except LoopDetectedError as e:
+    # ループ検知: 5回を超える繰り返し実行
+    # → ユーザーに報告、タスク分割を提案
+    print(f"ループ検知: {e.task_id} ({e.count}/{e.max_iterations})")
+```
+
+**CycleDetector**: 遷移サイクル（review→fix→review）を検知
+
+```python
+from ensemble.loop_detector import CycleDetector
+from ensemble.workflow import check_review_cycle
+
+cycle_detector = CycleDetector(max_cycles=3)
+try:
+    check_review_cycle("task-001", "review", "fix", cycle_detector)
+except LoopDetectedError as e:
+    # サイクル検知: review→fix→reviewが3回を超える
+    # → レビュー基準の見直し、手動介入を提案
+    print(f"サイクル検知: {e.task_id} ({e.count}/{e.max_iterations})")
+```
+
+**ループ検知時の対応**:
+1. ユーザーに報告（無限ループの可能性）
+2. タスクを分割・再定義する提案
+3. レビュー基準を見直す提案（サイクルの場合）
+
+## Bloom's Taxonomy タスク分類（P3-2）
+
+タスクの認知レベルに基づいてモデルを選択し、コスト効率を向上:
+
+```python
+from ensemble.bloom import BloomLevel, classify_task, recommend_model
+
+# タスク分類
+level = classify_task("認証システムを設計する")  # → BloomLevel.CREATE (6)
+
+# モデル推奨
+model = recommend_model(level)  # → "opus" (L4-L6)
+```
+
+**認知レベル定義**:
+
+| レベル | 認知能力 | 例 | 推奨モデル |
+|-------|---------|---|-----------|
+| L1 | Remember（想起） | コピー、リスト作成 | sonnet |
+| L2 | Understand（理解） | 説明、要約 | sonnet |
+| L3 | Apply（適用） | 実装、テスト | sonnet |
+| L4 | Analyze（分析） | 比較、調査 | opus |
+| L5 | Evaluate（評価） | 判断、レビュー | opus |
+| L6 | Create（創造） | 設計、アーキテクチャ | opus |
+
+**タスク分類の活用**:
+- L1-L3: Workerにsonnetで実行（コスト効率重視）
+- L4-L6: Conductorまたは専門agentにopusで実行（品質重視）
 
 ## 禁止事項
 

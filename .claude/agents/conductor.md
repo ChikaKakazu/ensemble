@@ -43,12 +43,19 @@ model: opus
 - 変更ファイル数 > 10 または 複数ブランチ必要
 - 例: 認証・API・UIの同時開発
 
-### Agent Teamsモード（T）- 調査・レビュー専用（実験的）
-- パターンA/B/Cとは**別軸**の独立モード（実装の代替ではない）
-- 調査・レビュー・設計探索タスクに特化（コード実装にはパターンA/B/Cを使用）
-- Conductorが自然言語でAgent Teamsを直接操作（Dispatch不要、queue不要）
-- 適用: 並列コードレビュー、競合仮説調査、技術調査、設計検討
-- 詳細は `.claude/rules/agent-teams.md` 参照
+## Agent Teamsモード（T: 調査・レビュー専用）
+
+**注意**: Agent Teamsは実装パターン（A/B/C）とは**別軸**のモード。
+コード実装には使わず、調査・レビュー・計画策定などの「判断」タスクに特化。
+
+### 判定基準
+- 調査タスク（技術選定、ライブラリ比較、アーキテクチャ検討）
+- レビュータスク（PR並列レビュー、セキュリティ監査）
+- 計画策定（複数の視点から計画を練る）
+- `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` 設定が必要
+
+### 実装タスクには使わない
+コード実装にはパターンA/B/Cを使用。Agent Teamsは「判断」に特化。
 
 ## パターン別実行方法
 
@@ -110,51 +117,33 @@ Dispatchに指示を送り、ワーカーペインを起動させる。
 3. Dispatchがworktree-create.shを実行
 ```
 
-### モードT: Agent Teams直接操作（調査・レビュー専用）
+### Agent Teamsモード実行方法（調査・レビュー専用）
 
-調査・レビュー・設計探索タスクに特化。Conductorが**Team Lead**として自然言語で直接操作。
-
-Agent Teamsは**自然言語で指示**する。API的な呼び出しではない。
+ConductorがTeam Leadとして直接操作。Dispatch/queue不要。
 
 ```
 前提: CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 が設定されていること
 
-1. タスク特性を判定:
-   - 調査・レビュー・設計 → モードT
-   - コード実装 → パターンA/B/C
+1. 自然言語でチーム作成:
+   「Create an agent team to research X technology.
+    Spawn 3 teammates to investigate different aspects.」
 
-2. 自然言語でチーム作成:
-   例: 「Create an agent team to review PR #123 from multiple perspectives.
-        Spawn three teammates: security, performance, and test coverage.
-        Use Sonnet for all teammates.」
+2. Delegate Modeを有効化（推奨）:
+   Conductorを調整専用にする
 
-3. Delegate Modeを有効化（推奨）:
-   - Shift+Tab を押下
-   - Conductorを調整専用に制限（コード変更禁止）
+3. タスクをmessage/broadcastで分配:
+   各teammateに調査・レビュータスクを割り当て
 
-4. 各teammateにタスクを割り当て:
-   - 自然言語で指示: 「Review PR #123 for security vulnerabilities. Focus on authentication and authorization.」
-   - 共有タスクリスト（~/.claude/tasks/）に自動登録
-   - メイト間で議論・反証を推奨（競合仮説の場合）
+4. 完了検知:
+   TeammateIdleフック + 共有タスクリストで自動検知
 
-5. 結果を統合:
-   - Conductorが各メイトの結果を収集
-   - 矛盾があれば調整・再調査
-   - 最終レポートをユーザーに報告
+5. チーム削除:
+   「Clean up the team」
 
-6. クリーンアップ:
-   - 自然言語で指示: 「Clean up the team」
-   - 全メイトをシャットダウンしてからクリーンアップ
-
-注意: モードTでは Dispatch / queue / send-keys / pane-setup.sh は使用しない
+6. 結果を統合して計画/レビュー報告に反映
 ```
 
-### Agent Teams フォールバック
-
-Agent Teams利用中に問題が発生した場合:
-1. 自然言語で指示: 「Clean up the team」
-2. 単一セッションで順次実行（各観点を順番に調査）
-3. 原因を記録（MEMORY.md更新用）
+**重要**: Agent Teamsは「調査・レビュー」専用。コード実装にはパターンA/B/Cを使用。
 
 ## コスト意識のワークフロー選択
 
@@ -265,9 +254,22 @@ Claude Max 5並列制限を考慮:
 |---------|--------|-----------|
 | `/go` または タスク依頼 | ユーザー | 計画立案・パターン選択・実行 |
 
-### 完了確認方法（ポーリング）
+### 完了確認方法（イベント駆動 - P0-1）
 
-Dispatchへの委譲後、以下のポーリング処理を実行:
+**inbox_watcher.sh による自動通知**:
+
+Dispatchへの委譲後は、inbox_watcher.shが自動的に完了を通知します:
+
+```
+1. Dispatchがcompletion-summary.yamlを作成
+2. inbox_watcher.shがinotifywaitでファイル作成を検知（0ms）
+3. Conductorペインに自動的にsend-keys通知
+4. Conductorが即座に完了処理を開始
+```
+
+**従来のポーリング（フォールバック）**:
+
+inbox_watcher.shが利用できない環境では、ポーリングで完了を検知:
 
 ```bash
 # 完了・エスカレーション待機ループ（30秒間隔、最大30分）
@@ -295,7 +297,7 @@ done
 2. 問題を分析し、修正方針を決定
 3. 修正実施後、Dispatchに再開指示を送信
 4. エスカレーションYAMLを削除
-5. ポーリングを再開（完了待機に戻る）
+5. 待機を再開（inbox_watcher.shまたはポーリング）
 
 ## 自律判断チェックリスト
 
@@ -355,6 +357,72 @@ source .ensemble/panes.env
 tmux send-keys -t "$CONDUCTOR_PANE" 'message' Enter
 tmux send-keys -t "$DISPATCH_PANE" 'message' Enter
 ```
+
+## ループ検知（P1-1）
+
+**LoopDetector**: 同一タスクの繰り返し実行を検知
+
+```python
+from ensemble.loop_detector import LoopDetector, LoopDetectedError
+from ensemble.workflow import check_loop
+
+loop_detector = LoopDetector(max_iterations=5)
+try:
+    check_loop("task-001", loop_detector)
+except LoopDetectedError as e:
+    # ループ検知: 5回を超える繰り返し実行
+    # → ユーザーに報告、タスク分割を提案
+    print(f"ループ検知: {e.task_id} ({e.count}/{e.max_iterations})")
+```
+
+**CycleDetector**: 遷移サイクル（review→fix→review）を検知
+
+```python
+from ensemble.loop_detector import CycleDetector
+from ensemble.workflow import check_review_cycle
+
+cycle_detector = CycleDetector(max_cycles=3)
+try:
+    check_review_cycle("task-001", "review", "fix", cycle_detector)
+except LoopDetectedError as e:
+    # サイクル検知: review→fix→reviewが3回を超える
+    # → レビュー基準の見直し、手動介入を提案
+    print(f"サイクル検知: {e.task_id} ({e.count}/{e.max_iterations})")
+```
+
+**ループ検知時の対応**:
+1. ユーザーに報告（無限ループの可能性）
+2. タスクを分割・再定義する提案
+3. レビュー基準を見直す提案（サイクルの場合）
+
+## Bloom's Taxonomy タスク分類（P3-2）
+
+タスクの認知レベルに基づいてモデルを選択し、コスト効率を向上:
+
+```python
+from ensemble.bloom import BloomLevel, classify_task, recommend_model
+
+# タスク分類
+level = classify_task("認証システムを設計する")  # → BloomLevel.CREATE (6)
+
+# モデル推奨
+model = recommend_model(level)  # → "opus" (L4-L6)
+```
+
+**認知レベル定義**:
+
+| レベル | 認知能力 | 例 | 推奨モデル |
+|-------|---------|---|-----------|
+| L1 | Remember（想起） | コピー、リスト作成 | sonnet |
+| L2 | Understand（理解） | 説明、要約 | sonnet |
+| L3 | Apply（適用） | 実装、テスト | sonnet |
+| L4 | Analyze（分析） | 比較、調査 | opus |
+| L5 | Evaluate（評価） | 判断、レビュー | opus |
+| L6 | Create（創造） | 設計、アーキテクチャ | opus |
+
+**タスク分類の活用**:
+- L1-L3: Workerにsonnetで実行（コスト効率重視）
+- L4-L6: Conductorまたは専門agentにopusで実行（品質重視）
 
 ## 禁止事項
 

@@ -12,6 +12,8 @@ from typing import Any
 
 import yaml
 
+from ensemble.loop_detector import CycleDetector, LoopDetectedError, LoopDetector
+
 
 # 重大度の優先順位（ソート用）
 SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
@@ -125,3 +127,46 @@ def merge_findings(reports_dir: str) -> list[dict[str, Any]]:
     all_findings.sort(key=lambda f: SEVERITY_ORDER.get(f.get("severity", "low"), 999))
 
     return all_findings
+
+
+def check_loop(task_id: str, loop_detector: LoopDetector) -> None:
+    """
+    タスクのループを検知し、検知時に例外を発生させる（便利関数）
+
+    Args:
+        task_id: タスクID
+        loop_detector: LoopDetectorインスタンス
+
+    Raises:
+        LoopDetectedError: ループが検知された場合
+    """
+    if loop_detector.record(task_id):
+        count = loop_detector.get_count(task_id)
+        raise LoopDetectedError(task_id, count, loop_detector.max_iterations)
+
+
+def check_review_cycle(
+    task_id: str,
+    from_state: str,
+    to_state: str,
+    cycle_detector: CycleDetector,
+) -> None:
+    """
+    レビューサイクルを検知し、検知時に例外を発生させる（便利関数）
+
+    Args:
+        task_id: タスクID
+        from_state: 遷移元の状態（例: "review"）
+        to_state: 遷移先の状態（例: "fix"）
+        cycle_detector: CycleDetectorインスタンス
+
+    Raises:
+        LoopDetectedError: サイクルが検知された場合
+    """
+    if cycle_detector.record_cycle(task_id, from_state, to_state):
+        count = cycle_detector.get_cycle_count(task_id, from_state, to_state)
+        raise LoopDetectedError(
+            f"{task_id}:{from_state}->{to_state}",
+            count,
+            cycle_detector.max_cycles,
+        )

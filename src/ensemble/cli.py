@@ -1,5 +1,7 @@
 """Ensemble CLI - AI Orchestration Tool for Claude Code."""
 
+import sys
+
 import click
 
 from ensemble import __version__
@@ -7,6 +9,7 @@ from ensemble.commands.init import init
 from ensemble.commands.issue import issue
 from ensemble.commands.launch import launch
 from ensemble.commands.upgrade import upgrade
+from ensemble.pipeline import PipelineRunner
 
 
 @click.group()
@@ -24,6 +27,51 @@ cli.add_command(init)
 cli.add_command(issue)
 cli.add_command(launch)
 cli.add_command(upgrade)
+
+
+@cli.command()
+@click.option(
+    "--task",
+    "-t",
+    required=True,
+    help="Task description",
+)
+@click.option(
+    "--workflow",
+    "-w",
+    default="default",
+    type=click.Choice(["simple", "default", "heavy"]),
+    help="Workflow type (default: default)",
+)
+@click.option(
+    "--auto-pr",
+    is_flag=True,
+    help="Automatically create PR after execution",
+)
+@click.option(
+    "--branch",
+    "-b",
+    default=None,
+    help="Branch name (auto-generated if not specified)",
+)
+def pipeline(task: str, workflow: str, auto_pr: bool, branch: str | None) -> None:
+    """Run pipeline mode for CI/CD environments.
+
+    Execute tasks in non-interactive mode without tmux.
+    Outputs NDJSON logs to stdout and returns exit code.
+
+    Exit codes:
+      0 - Success
+      1 - Execution error
+      2 - Review needs_fix
+      3 - Loop detected
+
+    Example:
+      ensemble pipeline --task "Fix authentication bug" --auto-pr
+    """
+    runner = PipelineRunner(task=task, workflow=workflow, auto_pr=auto_pr, branch=branch)
+    exit_code = runner.run()
+    sys.exit(exit_code)
 
 
 def main() -> None:

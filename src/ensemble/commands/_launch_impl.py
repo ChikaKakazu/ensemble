@@ -10,6 +10,7 @@ from typing import Optional
 
 import click
 
+from ensemble.inbox import InboxWatcher
 from ensemble.templates import get_template_path
 
 
@@ -84,6 +85,17 @@ def run_launch(session: str = "ensemble", attach: bool = True) -> None:
 
     # Save pane IDs
     _save_pane_ids(session, ensemble_dir)
+
+    # Start inbox_watcher
+    try:
+        inbox_watcher = InboxWatcher(project_root)
+        inbox_watcher.start()
+        click.echo("  inbox_watcher started (event-driven notifications enabled)")
+    except FileNotFoundError as e:
+        click.echo(f"  Warning: {e}")
+        click.echo("  Event-driven notifications disabled. Polling mode will be used.")
+    except RuntimeError as e:
+        click.echo(f"  Warning: Failed to start inbox_watcher: {e}")
 
     click.echo(click.style("Ensemble sessions started!", fg="green"))
     click.echo("")

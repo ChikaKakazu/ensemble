@@ -183,6 +183,26 @@ AGENT_TEAMS_MODE=$AGENT_TEAMS_MODE
 # tmux send-keys -t "\$DISPATCH_PANE" 'message' Enter
 EOF
 
+# inbox_watcher.shをバックグラウンドで起動
+echo "Starting inbox_watcher..."
+if [ -f "$PROJECT_DIR/scripts/inbox_watcher.sh" ]; then
+    INBOX_SCRIPT="$PROJECT_DIR/scripts/inbox_watcher.sh"
+elif [ -f "$PROJECT_DIR/src/ensemble/templates/scripts/inbox_watcher.sh" ]; then
+    INBOX_SCRIPT="$PROJECT_DIR/src/ensemble/templates/scripts/inbox_watcher.sh"
+else
+    echo "Warning: inbox_watcher.sh not found. Event-driven notifications disabled."
+    INBOX_SCRIPT=""
+fi
+
+if [ -n "$INBOX_SCRIPT" ]; then
+    PROJECT_DIR="$PROJECT_DIR" bash "$INBOX_SCRIPT" &
+    INBOX_WATCHER_PID=$!
+    echo "  inbox_watcher started (PID: $INBOX_WATCHER_PID)"
+
+    # tmux終了時にinbox_watcherも終了するようtrap設定
+    trap "kill $INBOX_WATCHER_PID 2>/dev/null || true" EXIT
+fi
+
 echo ""
 echo "=========================================="
 echo "  Ensemble launched successfully!"

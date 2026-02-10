@@ -8,6 +8,7 @@ description: |
     /go --simple タスク内容     - パターンA強制（subagent直接）
     /go --parallel タスク内容   - パターンB強制（tmux並列）
     /go --worktree タスク内容   - パターンC強制（git worktree）
+    /go --teams タスク内容      - モードT強制（Agent Teams調査・レビュー）
 ---
 
 以下のタスクをEnsembleのConductorとして実行してください。
@@ -25,6 +26,7 @@ $ARGUMENTS
 | `--simple` | パターンAを強制（subagentで直接実行） |
 | `--parallel` | パターンBを強制（tmux並列実行） |
 | `--worktree` | パターンCを強制（git worktree分離） |
+| `--teams` | モードTを強制（Agent Teamsで調査・レビュー実行） |
 | オプションなし | タスク内容から自動判定 |
 
 オプションが指定された場合、計画策定時のパターン判定をスキップし、指定されたパターンで実行してください。
@@ -38,9 +40,13 @@ $ARGUMENTS
    - タスク分解（サブタスク一覧）
    - コスト見積もり → ワークフロー選択（simple/default/heavy/worktree）
    - 実行パターンの選択（オプション指定がない場合のみ自動判定）:
+     - まず「コード実装か？調査・レビューか？」を判定:
+       - コード実装 → パターンA/B/C
+       - 調査・レビュー・設計 → モードT
      - **パターンA**: 変更ファイル ≤ 3 → subagentで直接実行（takt方式）
      - **パターンB**: 変更ファイル 4〜10、並列可能 → tmux多ペイン（shogun方式）
      - **パターンC**: 機能独立、変更ファイル > 10 → git worktree分離（shogun方式）
+     - **モードT**: 調査・レビュー・設計タスク → Agent Teamsで並列調査（パターンA/B/Cとは別軸）
    - 必要なskills/agents/MCPの確認
 
 2. **計画をユーザーに確認**し、承認を得る
@@ -67,9 +73,18 @@ $ARGUMENTS
    3. 各worktreeでワーカーを起動
    4. 統合・相互レビュー後に完了
 
-4. 実行中は `status/dashboard.md` を都度更新（Dispatchが担当）
+   **モードT（Agent Teams - 調査・レビュー専用）**:
+   - Conductor が Team Lead として直接操作（Dispatch不要）
+   - 自然言語でチーム作成・タスク割り当て
+   - 各teammateが独立して調査・レビュー
+   - Conductorが結果を統合・矛盾解消
+   - 詳細は `.claude/rules/agent-teams.md` 参照
+
+4. 実行中は `status/dashboard.md` を都度更新（Dispatchが担当。モードTはConductorが担当）
 
 ### 完了待機（全パターン共通）
+
+※ モードTではDispatchを使用しないため、以下のポーリングは不要。Conductorが直接Agent Teamsの完了を管理する。
 
 Dispatchへの委譲後、ポーリングで完了またはエスカレーションを待機:
 

@@ -14,7 +14,8 @@ from typing import Any
 
 import yaml
 
-from ensemble.lock import atomic_claim, atomic_write
+from ensemble.dependency import DependencyResolver
+from ensemble.lock import atomic_claim, atomic_write, atomic_write_with_lock
 
 
 class TaskQueue:
@@ -75,7 +76,7 @@ class TaskQueue:
 
         task_file = self.tasks_dir / f"{task_id}.yaml"
         content = yaml.dump(task, allow_unicode=True, default_flow_style=False)
-        atomic_write(str(task_file), content)
+        atomic_write_with_lock(str(task_file), content)
 
         return task_id
 
@@ -135,7 +136,7 @@ class TaskQueue:
         # reportsに保存
         report_file = self.reports_dir / f"{task_id}.yaml"
         content = yaml.dump(report, allow_unicode=True, default_flow_style=False)
-        atomic_write(str(report_file), content)
+        atomic_write_with_lock(str(report_file), content)
 
         # processingから削除
         if processing_file.exists():
@@ -158,6 +159,81 @@ class TaskQueue:
         for dir_path in [self.tasks_dir, self.processing_dir, self.reports_dir]:
             for f in dir_path.glob("*.yaml"):
                 f.unlink()
+
+    def enqueue_with_dependency(
+        self,
+        command: str,
+        agent: str,
+        params: dict[str, Any] | None = None,
+        blocked_by: list[str] | None = None,
+    ) -> str:
+        """
+        依存関係付きでタスクをキューに追加する
+
+        Args:
+            command: 実行するコマンド
+            agent: 担当エージェント
+            params: 追加パラメータ
+            blocked_by: このタスクがブロックされている他のタスクIDのリスト
+
+        Returns:
+            タスクID
+        """
+        task_id = self._generate_task_id()
+
+        task = {
+            "task_id": task_id,
+            "command": command,
+            "agent": agent,
+            "params": params or {},
+            "blocked_by": blocked_by or [],
+            "status": "pending",
+            "created_at": datetime.now().isoformat(),
+        }
+
+        task_file = self.tasks_dir / f"{task_id}.yaml"
+        content = yaml.dump(task, allow_unicode=True, default_flow_style=False)
+        atomic_write_with_lock(str(task_file), content)
+
+        return task_id
+
+    def get_ready_tasks(self, completed_task_ids: list[str] | None = None) -> list[dict]:
+        """
+        依存関係を考慮して、実行可能なタスクを取得する
+
+        Args:
+            completed_task_ids: 完了済みタスクIDのリスト。
+                               Noneの場合はreports/から取得
+
+        Returns:
+            実行可能なタスクのリスト
+        """
+        # 全タスクを読み込み
+        all_tasks = []
+        for task_file in self.tasks_dir.glob("*.yaml"):
+            with open(task_file) as f:
+                task = yaml.safe_load(f)
+                if task:
+                    all_tasks.append(task)
+
+        # 完了済みタスクIDを取得
+        if completed_task_ids is None:
+            completed_task_ids = []
+            for report_file in self.reports_dir.glob("*.yaml"):
+                with open(report_file) as f:
+                    report = yaml.safe_load(f)
+                    if report and report.get("task_id"):
+                        completed_task_ids.append(report["task_id"])
+
+        # DependencyResolverで実行可能タスクをフィルタ
+        if not all_tasks:
+            return []
+
+        resolver = DependencyResolver(all_tasks)
+        for completed_id in completed_task_ids:
+            resolver.mark_completed(completed_id)
+
+        return resolver.get_ready_tasks()
 
     def _generate_task_id(self) -> str:
         """ユニークなタスクIDを生成"""
