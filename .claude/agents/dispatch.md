@@ -206,7 +206,7 @@ Dispatchは以下の場合に行動を開始する:
 ## dispatch-instruction.yaml フォーマット
 
 ```yaml
-type: start_workers  # or start_worktree
+type: start_workers  # or start_worktree or start_agent_teams
 worker_count: 2
 worker_agent: worker  # オプション: 専門agentを指定（デフォルトは worker）
 tasks:
@@ -219,22 +219,6 @@ tasks:
 created_at: "2026-02-03T10:00:00Z"
 workflow: default
 pattern: B  # B: tmux並列, C: worktree
-```
-
-### worker_agent フィールド（オプション）
-
-create-agentで生成した専門agent（frontend-specialist等）をWorkerとして使う場合に指定:
-
-- **未指定時**: デフォルトの `worker` agent を使用
-- **指定時**: `WORKER_AGENT=<agent名>` を環境変数として pane-setup.sh に渡す
-
-**pane-setup.sh呼び出し時の指定方法:**
-```bash
-# worker_agentが指定されている場合
-WORKER_AGENT="${worker_agent}" ./scripts/pane-setup.sh ${worker_count}
-
-# worker_agentが未指定の場合（デフォルト）
-./scripts/pane-setup.sh ${worker_count}
 ```
 
 ## ウィンドウ・ペイン構成
@@ -320,6 +304,44 @@ ls queue/ack/${TASK_ID}.ack
 while [ ! -f "queue/ack/${TASK_ID}.ack" ]; do
   sleep 1
 done
+```
+
+## ACK待機フロー（3段階自動エスカレーション）
+
+Worker無応答時に手動介入なしで自動復旧する。
+
+### フロー詳細
+
+1. **Phase 0**: タスク配信後、60秒待機
+2. **Phase 1**: ACKなし → 通常nudge（send-keys再送）、60秒待機
+3. **Phase 2**: ACKなし → Escape×2 + C-c + nudge、60秒待機
+4. **Phase 3**: ACKなし → /clear + nudge、60秒待機
+5. **失敗**: ACKなし → Conductorにエスカレーション報告
+
+### 実装
+
+escalate.shスクリプトが各Phaseを自動実行する。
+Dispatchは手動介入不要。
+
+### 使用方法
+
+Python APIを使用する場合:
+```python
+from ensemble.ack import AckManager
+
+ack_manager = AckManager()
+success, phase = ack_manager.wait_with_escalation(
+    task_id="task-123",
+    worker_id=1,
+    pane_id="%3",  # ワーカーのペインID
+    phase_timeout=60.0,
+    max_phases=3
+)
+
+if success:
+    print(f"ACK受信成功 (Phase {phase})")
+else:
+    print(f"全フェーズ失敗 → Conductorにエスカレーション")
 ```
 
 ## 完了報告の収集
@@ -513,6 +535,108 @@ tmux send-keys -t "$WORKER_{N}_PANE" Enter
 - **Dispatch**: 全Worker状態を把握する必要がある
 - **Conductor**: プロジェクト全体像・計画を維持する必要がある
 - コンテキスト逼迫時は `/compact` を自己判断で実行
+
+## イベント駆動通信（P0-1）
+
+**inbox_watcher.sh による自動通知**:
+
+完了報告の待機は、inbox_watcher.shが自動的に通知します:
+
+```
+1. Workerがqueue/reports/に完了報告を作成
+2. inbox_watcher.shがinotifywaitでファイル作成を検知（0ms）
+3. Dispatchペインに自動的にsend-keys通知
+4. Dispatchが即座に報告収集を開始
+```
+
+**従来のポーリング（フォールバック）**:
+
+inbox_watcher.shが利用できない環境では、タイムアウト（3分）後にqueue/reports/をポーリング（30秒間隔）で検知。
+
+**効果**:
+- 検知時間: 3-5分 → 0ms
+- 信頼性: ポーリングフォールバックで100%確実
+
+## タスク依存関係（P1-2）
+
+**blockedBy フィールド**:
+
+タスクが他のタスクに依存している場合、dispatch-instruction.yamlに記載:
+
+```yaml
+tasks:
+  - id: task-001
+    instruction: "データモデル実装"
+    files: ["models.py"]
+  - id: task-002
+    instruction: "APIエンドポイント実装"
+    files: ["api.py"]
+    blockedBy: ["task-001"]  # task-001完了後に実行
+```
+
+**配信フロー（依存関係対応）**:
+
+```
+1. dispatch-instruction.yamlを読み込む
+2. 依存関係を解析（dependency.pyを使用）
+3. 実行可能なタスク（blockedByなし）を先に配信
+4. 依存元タスク完了後、依存先タスクを配信
+5. 循環依存を検知したらエスカレーション
+```
+
+**実装例**:
+
+```python
+from ensemble.dependency import DependencyResolver
+
+resolver = DependencyResolver()
+for task in tasks:
+    resolver.add_task(task["id"], task.get("blockedBy", []))
+
+# トポロジカルソート
+sorted_tasks = resolver.resolve()
+if sorted_tasks is None:
+    # 循環依存検知 → エスカレーション
+    escalate_to_conductor("循環依存検知")
+```
+
+## NDJSONログ（P1-3）
+
+**NDJSONLogger による構造化ログ**:
+
+タスク配信・ACK確認・完了報告の各イベントをNDJSON形式で記録:
+
+```python
+from ensemble.logger import NDJSONLogger
+
+logger = NDJSONLogger()
+
+# タスク配信イベント
+logger.log_event("dispatch_instruction", {
+    "worker_count": 2,
+    "task_ids": ["task-001", "task-002"]
+})
+
+# ACK受信イベント
+logger.log_event("ack_received", {
+    "task_id": "task-001",
+    "worker_id": 1,
+    "phase": 0
+})
+
+# 完了報告イベント
+logger.log_event("completion_summary", {
+    "success_count": 2,
+    "failed_count": 0
+})
+```
+
+**ログファイル**: `.ensemble/logs/session-YYYYMMDD-HHMMSS.ndjson`
+
+**活用**:
+- セッション分析
+- エラー傾向の把握
+- パフォーマンス改善の指標
 
 ## 禁止事項
 

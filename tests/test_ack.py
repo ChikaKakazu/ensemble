@@ -2,6 +2,7 @@
 
 import time
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -91,3 +92,102 @@ class TestAckManager:
 
         # ISO形式のタイムスタンプを含む
         assert "T" in content  # 簡易チェック
+
+
+class TestAckManagerEscalation:
+    """AckManager の3段階エスカレーション機能のテスト"""
+
+    @pytest.fixture
+    def ack_manager(self, tmp_path: Path) -> AckManager:
+        """テスト用ACKマネージャを作成"""
+        return AckManager(ack_dir=tmp_path / "ack")
+
+    def test_wait_with_escalation_immediate_ack(
+        self, ack_manager: AckManager
+    ) -> None:
+        """Phase 1前にACK受信する場合のテスト"""
+        task_id = "task-immediate"
+
+        # 事前にACKを送信
+        ack_manager.send(task_id, "worker-1")
+
+        with patch("subprocess.run") as mock_run:
+            success, phase = ack_manager.wait_with_escalation(
+                task_id=task_id,
+                worker_id=1,
+                pane_id="%3",
+                phase_timeout=0.1,
+                max_phases=3,
+            )
+
+            # エスカレーション不要でACK受信成功
+            assert success is True
+            assert phase == 0
+            # escalate.shは呼ばれない
+            mock_run.assert_not_called()
+
+    def test_wait_with_escalation_phase1_ack(
+        self, ack_manager: AckManager
+    ) -> None:
+        """Phase 1 nudge後にACK受信する場合のテスト"""
+        task_id = "task-phase1"
+
+        with patch("subprocess.run") as mock_run:
+            # Phase 1エスカレーション後、ACKを送信
+            def send_ack_after_phase1(args, **kwargs):
+                if "1" in args:  # Phase 1判定
+                    ack_manager.send(task_id, "worker-1")
+
+            mock_run.side_effect = send_ack_after_phase1
+
+            success, phase = ack_manager.wait_with_escalation(
+                task_id=task_id,
+                worker_id=1,
+                pane_id="%3",
+                phase_timeout=0.1,
+                max_phases=3,
+            )
+
+            # Phase 1でACK受信成功
+            assert success is True
+            assert phase == 1
+            # escalate.shが1回呼ばれた
+            assert mock_run.call_count == 1
+
+    def test_wait_with_escalation_all_phases_fail(
+        self, ack_manager: AckManager
+    ) -> None:
+        """全フェーズ失敗の場合のテスト"""
+        task_id = "task-allfail"
+
+        with patch("subprocess.run") as mock_run:
+            success, phase = ack_manager.wait_with_escalation(
+                task_id=task_id,
+                worker_id=2,
+                pane_id="%4",
+                phase_timeout=0.1,
+                max_phases=3,
+            )
+
+            # 全フェーズ失敗
+            assert success is False
+            assert phase == 3
+            # escalate.shが3回呼ばれた（Phase 1, 2, 3）
+            assert mock_run.call_count == 3
+
+    def test_escalate_script_exists(self) -> None:
+        """escalate.shの存在確認"""
+        escalate_script = Path("src/ensemble/templates/scripts/escalate.sh")
+        assert (
+            escalate_script.exists()
+        ), f"escalate.sh not found at {escalate_script}"
+
+    def test_escalate_script_executable(self) -> None:
+        """escalate.shの実行権限確認"""
+        escalate_script = Path("src/ensemble/templates/scripts/escalate.sh")
+        if escalate_script.exists():
+            import os
+
+            assert os.access(
+                escalate_script, os.X_OK
+            ), f"escalate.sh is not executable"

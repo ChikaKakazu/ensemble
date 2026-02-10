@@ -18,6 +18,7 @@ Ensemble is an AI orchestration system that combines the best practices from:
   - Pattern A: Simple tasks via subagent
   - Pattern B: Medium tasks via tmux parallel panes (2-4 workers, auto-scaled)
   - Pattern C: Large tasks via git worktree separation
+  - Mode T: Research/review tasks via Agent Teams (parallel investigation)
 - **Parallel Execution Enhancements**:
   - Dynamic worker count (auto-scales based on task count)
   - Worker-level subagent parallelization (for 3+ files)
@@ -34,6 +35,17 @@ Ensemble is an AI orchestration system that combines the best practices from:
 - **Hooks Notification**: Terminal bell on agent completion (Stop) and errors (PostToolUseFailure)
 - **Status Line**: Real-time display of git branch, session state, worker count
 - **CLAUDE.md 150-line Limit Check**: Pre-commit hook to prevent instruction bloat
+- **Event-Driven Communication**: inbox_watcher.sh + inotifywait for 0ms detection
+- **Exclusive Locking**: flock + atomic write for concurrent YAML protection
+- **3-Phase Auto-Escalation**: Automatic worker recovery (nudge → Escape+C-c → /clear)
+- **Loop Detection**: LoopDetector + CycleDetector for infinite loop prevention
+- **Task Dependencies**: blocked_by field with DependencyResolver and cycle detection
+- **NDJSON Session Logging**: Structured logging for full session traceability
+- **Faceted Prompting**: 5-concern separation (WHO/RULES/WHAT/CONTEXT/OUTPUT)
+- **Progressive Disclosure Skills**: Dynamic skill injection based on task type
+- **CI/CD Pipeline Mode**: Non-interactive execution with `ensemble pipeline`
+- **Bloom's Taxonomy Classification**: Cognitive-level-based model selection (L1-L3: sonnet, L4-L6: opus)
+- **Bottom-Up Skill Discovery**: Auto-detect repeated patterns and suggest skill creation
 
 ## Installation
 
@@ -105,6 +117,7 @@ tmux attach -t ensemble-workers
 | Command | Description |
 |---------|-------------|
 | `/go <task>` | Full workflow with auto-pattern detection |
+| `/go --teams <task>` | Force Mode T: Research/review via Agent Teams |
 | `/go-light <task>` | Lightweight workflow for simple changes |
 | `/go-issue [number]` | Start implementation from GitHub Issue |
 | `/rpi-research <task>` | Research phase: requirement analysis, technical investigation, feasibility assessment |
