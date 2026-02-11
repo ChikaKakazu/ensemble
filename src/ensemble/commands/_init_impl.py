@@ -129,6 +129,9 @@ def _update_gitignore(project_root: Path) -> None:
 # Ensemble
 .ensemble/queue/
 .ensemble/panes.env
+status/
+queue/
+logs/
 """
 
     if gitignore.exists():
@@ -250,6 +253,9 @@ def _copy_agent_definitions(project_root: Path, force: bool) -> None:
         dest = project_root / ".claude" / "settings.json"
         if not dest.exists() or force:
             shutil.copy(settings_template, dest)
+            # Record file version for upgrade tracking
+            relative_path = str(dest.relative_to(project_root))
+            record_file_version(project_root, relative_path, dest)
             copied += 1
             click.echo("  Copied settings.json")
         else:
