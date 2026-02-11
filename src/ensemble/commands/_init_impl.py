@@ -100,11 +100,17 @@ For more information, see the [Ensemble documentation](https://github.com/ChikaK
                     if not skip:
                         new_lines.append(line)
                 content = "\n".join(new_lines)
+                # Write back content with section removed, then append new section
+                with open(claude_md, "w") as f:
+                    f.write(content)
+                    f.write(ensemble_section)
+                click.echo("  Updated CLAUDE.md with Ensemble section")
+                return
             else:
                 click.echo("  CLAUDE.md already contains Ensemble section (use --force to overwrite)")
                 return
 
-        # Append Ensemble section
+        # Append Ensemble section (first time)
         with open(claude_md, "a") as f:
             f.write(ensemble_section)
         click.echo("  Updated CLAUDE.md with Ensemble section")
