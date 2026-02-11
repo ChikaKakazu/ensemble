@@ -8,6 +8,7 @@ import click
 from ensemble import __version__
 from ensemble.autonomous_loop import AutonomousLoopRunner, LoopConfig, LoopStatus
 from ensemble.commands.init import init
+from ensemble.investigator import InvestigationStrategy, TaskInvestigator
 from ensemble.scanner import CodebaseScanner
 from ensemble.commands.issue import issue
 from ensemble.commands.launch import launch
@@ -215,7 +216,12 @@ def loop(
     default=["all"],
     help="Sources to include (default: all)",
 )
-def scan(output_format: str, include: tuple[str, ...]) -> None:
+@click.option(
+    "--exclude-tests",
+    is_flag=True,
+    help="Exclude test files from TODO/FIXME scanning",
+)
+def scan(output_format: str, include: tuple[str, ...], exclude_tests: bool) -> None:
     """Scan codebase and generate task candidates.
 
     Analyzes the project for TODO/FIXME comments, open GitHub issues,
@@ -226,15 +232,15 @@ def scan(output_format: str, include: tuple[str, ...]) -> None:
       # Full scan
       ensemble scan
 
-      # Only TODOs
-      ensemble scan --include todo
+      # Only TODOs (excluding test files)
+      ensemble scan --include todo --exclude-tests
 
       # JSON output
       ensemble scan --format json
     """
     import json as json_mod
 
-    scanner = CodebaseScanner(root_dir=Path.cwd())
+    scanner = CodebaseScanner(root_dir=Path.cwd(), exclude_tests=exclude_tests)
 
     include_set = set(include)
     scan_all = "all" in include_set
@@ -286,6 +292,136 @@ def scan(output_format: str, include: tuple[str, ...]) -> None:
 
     if result.total == 0:
         click.echo("No task candidates found.")
+
+
+@cli.command()
+@click.option(
+    "--strategy",
+    type=click.Choice(["auto", "agent_teams", "subprocess", "inline"]),
+    default="auto",
+    help="Investigation strategy (default: auto-detect)",
+)
+@click.option(
+    "--max-tasks",
+    default=5,
+    type=int,
+    help="Maximum number of tasks to investigate (default: 5)",
+)
+@click.option(
+    "--exclude-tests",
+    is_flag=True,
+    default=True,
+    help="Exclude test files from scanning (default: True)",
+)
+@click.option(
+    "--format",
+    "output_format",
+    default="text",
+    type=click.Choice(["text", "json"]),
+    help="Output format (default: text)",
+)
+def investigate(
+    strategy: str,
+    max_tasks: int,
+    exclude_tests: bool,
+    output_format: str,
+) -> None:
+    """Investigate task candidates from codebase scan.
+
+    First scans the codebase for task candidates, then uses Claude
+    to investigate each one for impact, complexity, and priority.
+
+    Strategies:
+      - auto: Use Agent Teams if available, else subprocess
+      - agent_teams: Generate Agent Teams script for parallel investigation
+      - subprocess: Investigate sequentially via Claude CLI
+      - inline: Quick analysis without Claude (fastest, least accurate)
+
+    Examples:
+
+      # Auto-detect strategy, investigate top 5 tasks
+      ensemble investigate
+
+      # Generate Agent Teams script
+      ensemble investigate --strategy agent_teams
+
+      # Quick inline analysis of top 10
+      ensemble investigate --strategy inline --max-tasks 10
+    """
+    import json as json_mod
+
+    # Step 1: Scan
+    click.echo("Scanning codebase...")
+    scanner = CodebaseScanner(root_dir=Path.cwd(), exclude_tests=exclude_tests)
+    scan_result = scanner.scan()
+
+    if scan_result.total == 0:
+        click.echo("No task candidates found. Nothing to investigate.")
+        return
+
+    click.echo(f"Found {scan_result.total} task candidates.")
+
+    # Sort by priority and limit
+    sorted_tasks = scan_result.sorted_by_priority()[:max_tasks]
+    click.echo(f"Investigating top {len(sorted_tasks)} tasks...")
+    click.echo("")
+
+    # Step 2: Determine strategy
+    force_strategy = None
+    if strategy != "auto":
+        strategy_map = {
+            "agent_teams": InvestigationStrategy.AGENT_TEAMS,
+            "subprocess": InvestigationStrategy.SUBPROCESS,
+            "inline": InvestigationStrategy.INLINE,
+        }
+        force_strategy = strategy_map[strategy]
+
+    investigator = TaskInvestigator(
+        root_dir=Path.cwd(),
+        force_strategy=force_strategy,
+    )
+
+    detected = investigator.detect_strategy()
+    click.echo(f"Strategy: {detected.value}")
+
+    # Step 3: Investigate
+    if detected == InvestigationStrategy.AGENT_TEAMS:
+        # Generate Agent Teams script
+        script = investigator.generate_agent_teams_script(sorted_tasks)
+        click.echo("")
+        click.echo("=" * 50)
+        click.echo("Agent Teams Investigation Script")
+        click.echo("=" * 50)
+        click.echo("")
+        click.echo("Copy and paste the following into your Conductor session:")
+        click.echo("")
+        click.echo(script)
+        click.echo("")
+        click.echo("Or use subprocess mode for automated investigation:")
+        click.echo("  ensemble investigate --strategy subprocess")
+    else:
+        results = investigator.investigate_batch(sorted_tasks, max_tasks=max_tasks)
+
+        if output_format == "json":
+            data = {
+                "strategy": detected.value,
+                "total_scanned": scan_result.total,
+                "investigated": len(results),
+                "results": [
+                    {
+                        "task_title": r.task_title,
+                        "findings": r.findings,
+                        "recommendation": r.recommendation,
+                        "estimated_effort": r.estimated_effort,
+                        "priority_adjustment": r.priority_adjustment,
+                    }
+                    for r in results
+                ],
+            }
+            click.echo(json_mod.dumps(data, indent=2, ensure_ascii=False))
+        else:
+            click.echo("")
+            click.echo(investigator.format_results(results))
 
 
 def main() -> None:

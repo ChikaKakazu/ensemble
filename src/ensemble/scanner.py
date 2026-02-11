@@ -164,12 +164,14 @@ class CodebaseScanner:
     プロジェクトディレクトリを分析し、タスク候補を自動生成する。
     """
 
-    def __init__(self, root_dir: Path) -> None:
+    def __init__(self, root_dir: Path, exclude_tests: bool = False) -> None:
         """
         Args:
             root_dir: プロジェクトルートディレクトリ
+            exclude_tests: テストファイル/ディレクトリを除外するか
         """
         self.root_dir = root_dir
+        self.exclude_tests = exclude_tests
 
     def scan(self) -> ScanResult:
         """全スキャンを実行し結果を統合する
@@ -367,8 +369,32 @@ class CodebaseScanner:
             if any(part in _EXCLUDE_DIRS for part in parts):
                 continue
 
+            # テストファイル除外
+            if self.exclude_tests and self._is_test_file(path):
+                continue
+
             # 拡張子チェック
             if path.suffix.lower() not in _TEXT_EXTENSIONS:
                 continue
 
             yield path
+
+    def _is_test_file(self, path: Path) -> bool:
+        """テストファイルかどうかを判定する"""
+        rel_parts = path.relative_to(self.root_dir).parts
+
+        # テストディレクトリ内のファイル
+        test_dirs = {"tests", "test", "__tests__", "spec", "specs"}
+        if any(part in test_dirs for part in rel_parts):
+            return True
+
+        # テストファイル名パターン
+        name = path.name
+        if name.startswith("test_") or name.endswith("_test.py"):
+            return True
+        if name.startswith("test.") or name.endswith(".test.js") or name.endswith(".test.ts"):
+            return True
+        if name.endswith(".spec.js") or name.endswith(".spec.ts"):
+            return True
+
+        return False
