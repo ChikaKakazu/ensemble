@@ -175,41 +175,82 @@ def _create_panes_env(ensemble_dir: Path) -> None:
 
 
 def _copy_agent_definitions(project_root: Path, force: bool) -> None:
-    """Copy agent definitions to local .claude/agents/."""
-    click.echo("\nCopying agent definitions for local customization...")
+    """Copy all Ensemble templates to local .claude/ directory.
 
-    claude_agents_dir = project_root / ".claude" / "agents"
-    claude_agents_dir.mkdir(parents=True, exist_ok=True)
+    Copies agents, commands, scripts, workflows, instructions, policies,
+    personas, output-contracts, knowledge, skills, hooks, and rules.
+    """
+    click.echo("\nCopying Ensemble templates for local customization...")
 
-    template_agents = get_template_path("agents")
-    if not template_agents.exists():
-        click.echo(click.style("  Warning: Agent templates not found", fg="yellow"))
-        return
+    # Template categories that map to .claude/ subdirectories
+    # (template_type, glob_pattern, dest_subdir)
+    template_categories: list[tuple[str, str, str]] = [
+        ("agents", "*.md", "agents"),
+        ("commands", "*.md", "commands"),
+        ("scripts", "*.sh", "scripts"),
+        ("workflows", "*.yaml", "workflows"),
+        ("instructions", "*.md", "instructions"),
+        ("policies", "*.md", "policies"),
+        ("personas", "*.md", "personas"),
+        ("output-contracts", "*.md", "output-contracts"),
+        ("knowledge", "*.md", "knowledge"),
+        ("skills", "*.md", "skills"),
+        ("hooks/scripts", "*.sh", "hooks/scripts"),
+        ("rules", "*.md", "rules"),
+    ]
 
-    for agent_file in template_agents.glob("*.md"):
-        dest = claude_agents_dir / agent_file.name
-        if dest.exists() and not force:
-            click.echo(f"  Skipped {agent_file.name} (exists, use --force to overwrite)")
+    copied = 0
+    skipped = 0
+
+    for template_type, glob_pattern, dest_subdir in template_categories:
+        template_dir = _get_template_path_safe(template_type)
+        if template_dir is None or not template_dir.exists():
             continue
-        shutil.copy(agent_file, dest)
-        # Record file version for upgrade tracking
-        relative_path = str(dest.relative_to(project_root))
-        record_file_version(project_root, relative_path, dest)
-        click.echo(f"  Copied {agent_file.name}")
 
-    # Also copy commands
-    claude_commands_dir = project_root / ".claude" / "commands"
-    claude_commands_dir.mkdir(parents=True, exist_ok=True)
+        dest_dir = project_root / ".claude" / dest_subdir
+        dest_dir.mkdir(parents=True, exist_ok=True)
 
-    template_commands = get_template_path("commands")
-    if template_commands.exists():
-        for cmd_file in template_commands.glob("*.md"):
-            dest = claude_commands_dir / cmd_file.name
+        files = list(template_dir.glob(glob_pattern))
+        if not files:
+            continue
+
+        for src_file in files:
+            dest = dest_dir / src_file.name
             if dest.exists() and not force:
-                click.echo(f"  Skipped {cmd_file.name} (exists)")
+                skipped += 1
                 continue
-            shutil.copy(cmd_file, dest)
+            shutil.copy(src_file, dest)
+            # Make shell scripts executable
+            if src_file.suffix == ".sh":
+                dest.chmod(0o755)
             # Record file version for upgrade tracking
             relative_path = str(dest.relative_to(project_root))
             record_file_version(project_root, relative_path, dest)
-            click.echo(f"  Copied {cmd_file.name}")
+            copied += 1
+            click.echo(f"  Copied {dest_subdir}/{src_file.name}")
+
+    # Copy settings.json template
+    settings_template = _get_template_path_safe("settings.json")
+    if settings_template and settings_template.exists():
+        dest = project_root / ".claude" / "settings.json"
+        if not dest.exists() or force:
+            shutil.copy(settings_template, dest)
+            copied += 1
+            click.echo("  Copied settings.json")
+        else:
+            skipped += 1
+
+    click.echo(f"\n  Total: {copied} copied, {skipped} skipped (use --force to overwrite)")
+
+
+def _get_template_path_safe(template_type: str) -> Optional[Path]:
+    """Get template path without raising ValueError for extended types."""
+    try:
+        return get_template_path(template_type)
+    except ValueError:
+        # For types not in the original valid_types, use direct path
+        package_dir = Path(__file__).parent.parent / "templates"
+        path = package_dir / template_type
+        if path.exists():
+            return path
+        return None
