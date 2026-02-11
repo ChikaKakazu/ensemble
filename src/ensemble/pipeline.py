@@ -121,35 +121,68 @@ class PipelineRunner:
 
     def _execute_task(self) -> int:
         """
-        タスクを実行（subagent順次実行）
+        タスクを実行（claude CLI経由）
 
         Returns:
             終了コード
         """
         self.logger.log_event("task_execute_start", {"task": self.task})
-
-        # TODO: subagent (Task tool) を使った実装に置き換える
-        # 現在はプレースホルダー実装
-        # 実際の実装では、Task toolを使ってタスクを実行し、結果を取得する
-
-        self.logger.log_event("task_execute_complete", {"status": "success"})
-        return EXIT_SUCCESS
+        try:
+            result = subprocess.run(
+                ["claude", "--print", "-m", self.task],
+                capture_output=True,
+                text=True,
+                timeout=600,  # 10分タイムアウト
+            )
+            if result.returncode != 0:
+                self.logger.log_event("task_execute_error", {"stderr": result.stderr[:500]})
+                return EXIT_ERROR
+            self.logger.log_event("task_execute_complete", {"status": "success"})
+            return EXIT_SUCCESS
+        except subprocess.TimeoutExpired:
+            self.logger.log_event("task_execute_timeout", {"timeout": 600})
+            return EXIT_ERROR
+        except FileNotFoundError:
+            self.logger.log_event("task_execute_error", {"error": "claude CLI not found"})
+            return EXIT_ERROR
 
     def _run_review(self) -> int:
         """
-        レビューを実行
+        レビューを実行（claude CLI経由）
 
         Returns:
             終了コード（approved=EXIT_SUCCESS, needs_fix=EXIT_NEEDS_FIX）
         """
         self.logger.log_event("review_start", {})
+        try:
+            review_prompt = (
+                "Review the changes in this branch. Check for: "
+                "1) Code quality 2) Security issues 3) Test coverage. "
+                "Output 'approved' if no critical issues, or 'needs_fix' with details."
+            )
+            result = subprocess.run(
+                ["claude", "--print", "-m", review_prompt],
+                capture_output=True,
+                text=True,
+                timeout=300,  # 5分タイムアウト
+            )
+            if result.returncode != 0:
+                self.logger.log_event("review_error", {"stderr": result.stderr[:500]})
+                return EXIT_ERROR
 
-        # TODO: レビュー実行の実装
-        # 現在はプレースホルダー実装
-        # 実際の実装では、reviewerエージェントを呼び出してレビューを実行する
+            output = result.stdout.lower()
+            if "needs_fix" in output:
+                self.logger.log_event("review_complete", {"result": "needs_fix"})
+                return EXIT_NEEDS_FIX
 
-        self.logger.log_event("review_complete", {"result": "approved"})
-        return EXIT_SUCCESS
+            self.logger.log_event("review_complete", {"result": "approved"})
+            return EXIT_SUCCESS
+        except subprocess.TimeoutExpired:
+            self.logger.log_event("review_timeout", {"timeout": 300})
+            return EXIT_ERROR
+        except FileNotFoundError:
+            self.logger.log_event("review_error", {"error": "claude CLI not found"})
+            return EXIT_ERROR
 
     def _commit_changes(self) -> None:
         """変更をコミット"""
