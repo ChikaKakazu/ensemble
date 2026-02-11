@@ -44,6 +44,10 @@ Ensemble is an AI orchestration system that combines the best practices from:
 - **Faceted Prompting**: 5-concern separation (WHO/RULES/WHAT/CONTEXT/OUTPUT)
 - **Progressive Disclosure Skills**: Dynamic skill injection based on task type
 - **CI/CD Pipeline Mode**: Non-interactive execution with `ensemble pipeline`
+- **Autonomous Loop Mode**: `ensemble loop --scan` for automatic task discovery and fix
+- **Codebase Scanner**: `ensemble scan` finds TODO/FIXME, GitHub Issues, PROGRESS.md tasks
+- **Task Investigation**: `ensemble investigate` analyzes scan results (inline, subprocess, or Agent Teams)
+- **Autonomous Task Continuation**: `/go` automatically scans for next tasks after completion
 - **Bloom's Taxonomy Classification**: Cognitive-level-based model selection (L1-L3: sonnet, L4-L6: opus)
 - **Bottom-Up Skill Discovery**: Auto-detect repeated patterns and suggest skill creation
 
@@ -106,17 +110,23 @@ tmux attach -t ensemble-workers
 | Command | Description |
 |---------|-------------|
 | `ensemble init` | Initialize Ensemble in current project |
-| `ensemble init --full` | Also copy agent/command definitions locally |
+| `ensemble init --full` | Copy all templates (agents, commands, scripts, workflows, hooks, rules, settings, etc.) |
 | `ensemble launch` | Start 2 tmux sessions (conductor + workers) |
 | `ensemble launch --no-attach` | Start sessions without attaching |
 | `ensemble upgrade` | Sync template updates (agents, commands, scripts) |
+| `ensemble scan` | Scan codebase for task candidates (TODO/FIXME, Issues, PROGRESS.md) |
+| `ensemble scan --exclude-tests` | Scan excluding test files |
+| `ensemble investigate` | Investigate scan results with Claude |
+| `ensemble loop --scan` | Autonomous loop: scan → fix → repeat |
+| `ensemble pipeline --task "..." ` | Non-interactive CI/CD pipeline mode |
 | `ensemble --version` | Show version |
 
 ### In-Session Commands (Conductor)
 
 | Command | Description |
 |---------|-------------|
-| `/go <task>` | Full workflow with auto-pattern detection |
+| `/go <task>` | Full workflow with auto-pattern detection + auto-continuation |
+| `/go --confirm <task>` | Same as /go but asks before starting next task |
 | `/go --teams <task>` | Force Mode T: Research/review via Agent Teams |
 | `/go-light <task>` | Lightweight workflow for simple changes |
 | `/go-issue [number]` | Start implementation from GitHub Issue |
@@ -129,6 +139,25 @@ tmux attach -t ensemble-workers
 | `/improve` | Manual self-improvement analysis |
 | `/status` | View current progress |
 | `/deploy` | Version bump, merge, and publish to PyPI |
+
+### What `ensemble init --full` Copies
+
+| Category | Files | Description |
+|----------|-------|-------------|
+| agents/ | 7 | Agent definitions (conductor, dispatch, worker, reviewer, etc.) |
+| commands/ | 11 | Slash commands (/go, /go-issue, /review, /improve, /rpi-*, etc.) |
+| scripts/ | 9 | Shell scripts (launch, pane-setup, dashboard-update, etc.) |
+| workflows/ | 4 | Workflow definitions (simple, default, heavy, worktree) |
+| instructions/ | 6 | Phase instructions (plan, implement, review, dispatch, etc.) |
+| policies/ | 5 | Policies (communication, delegation, review, coding, security) |
+| personas/ | 7 | Agent persona definitions |
+| output-contracts/ | 3 | Output format contracts (worker-report, review-report, etc.) |
+| knowledge/ | 1 | Project knowledge templates |
+| skills/ | 6 | Skill templates (testing, security-audit, worktree-manager, etc.) |
+| hooks/scripts/ | 4 | Claude Code hooks (session-scan, notify-stop, notify-error, etc.) |
+| rules/ | 4 | Rules (workflow, communication, infrastructure, agent-teams) |
+| settings.json | 1 | Claude Code project settings with hooks configuration |
+| **Total** | **68** | |
 
 ## Requirements
 
