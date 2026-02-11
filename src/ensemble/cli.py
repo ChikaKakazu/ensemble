@@ -115,6 +115,11 @@ def pipeline(task: str, workflow: str, auto_pr: bool, branch: str | None) -> Non
     help="Use TaskQueue for task selection instead of prompt file",
 )
 @click.option(
+    "--scan",
+    is_flag=True,
+    help="Use CodebaseScanner for automatic task discovery (scan → fix → repeat)",
+)
+@click.option(
     "--work-dir",
     default=".",
     type=click.Path(exists=True),
@@ -127,6 +132,7 @@ def loop(
     timeout: int,
     no_commit: bool,
     queue: bool,
+    scan: bool,
     work_dir: str,
 ) -> None:
     """Run autonomous loop mode.
@@ -135,6 +141,11 @@ def loop(
     Runs Claude in a loop, automatically picking up and completing tasks.
 
     Each iteration: read prompt → execute claude → commit → repeat.
+
+    Task sources (mutually exclusive):
+      - Default: read from prompt file (AGENT_PROMPT.md)
+      - --queue: pick tasks from TaskQueue
+      - --scan: auto-discover tasks via CodebaseScanner (TODO/FIXME/Issues)
 
     Safety features:
       - Max iteration limit (--max-iterations)
@@ -147,11 +158,11 @@ def loop(
       # Run with default prompt file
       ensemble loop --prompt AGENT_PROMPT.md --max-iterations 10
 
+      # Auto-discover and fix tasks from codebase scan
+      ensemble loop --scan --max-iterations 5
+
       # Run with task queue
       ensemble loop --queue --max-iterations 20
-
-      # Run with opus model, no commits
-      ensemble loop --model opus --no-commit
     """
     config = LoopConfig(
         max_iterations=max_iterations,
@@ -165,10 +176,13 @@ def loop(
         work_dir=Path(work_dir).resolve(),
         config=config,
         use_queue=queue,
+        use_scan=scan,
     )
 
     click.echo(f"Starting autonomous loop (max {max_iterations} iterations, model: {model})")
-    if queue:
+    if scan:
+        click.echo("Mode: CodebaseScanner (auto-discover tasks)")
+    elif queue:
         click.echo("Mode: TaskQueue")
     else:
         click.echo(f"Mode: Prompt file ({prompt})")

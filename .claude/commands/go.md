@@ -33,6 +33,17 @@ $ARGUMENTS
 
 ## 実行手順
 
+### Phase 0: タスク発見（自動）
+
+SessionStartフックにより `ensemble scan --exclude-tests` が自動実行され、
+タスク候補がコンテキストに表示されている。タスクが明示的に指定されていない場合は、
+scan結果から最優先タスクを選択するか、`ensemble investigate` で詳細調査を実行する。
+
+タスク発見コマンド:
+- `ensemble scan --exclude-tests` - タスク候補一覧
+- `ensemble investigate --strategy inline` - 高速調査
+- `ensemble investigate --strategy agent_teams` - Agent Teamsで並列調査
+
 ### Phase 1: 計画策定
 
 1. **planモードに切り替え**、以下を策定:
