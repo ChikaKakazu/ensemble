@@ -41,6 +41,15 @@ REQUESTED_WORKER_COUNT="${1:-2}"  # 引数を別変数に保存（source上書�
 PROJECT_DIR="${PROJECT_DIR:-$(pwd)}"
 PANES_FILE="$PROJECT_DIR/.ensemble/panes.env"
 
+# スクリプトディレクトリの解決（.claude/scripts/ を優先、scripts/ にフォールバック）
+if [ -d "$PROJECT_DIR/.claude/scripts" ]; then
+    SCRIPTS_DIR="$PROJECT_DIR/.claude/scripts"
+elif [ -d "$PROJECT_DIR/scripts" ]; then
+    SCRIPTS_DIR="$PROJECT_DIR/scripts"
+else
+    SCRIPTS_DIR=""
+fi
+
 # 最大4ワーカー（Claude Max 5並列 - Conductor用1を除く）
 if [ "$REQUESTED_WORKER_COUNT" -gt 4 ]; then
     echo "Warning: Max 4 workers allowed. Reducing from $REQUESTED_WORKER_COUNT to 4."
@@ -189,10 +198,10 @@ echo "Switch to workers window: tmux attach -t $WORKERS_SESSION"
 echo ""
 
 # ワーカー起動完了後にモード表示を更新
-if [ -f "$PROJECT_DIR/scripts/update-mode.sh" ]; then
+if [ -n "$SCRIPTS_DIR" ] && [ -f "$SCRIPTS_DIR/update-mode.sh" ]; then
     if [ "$WORKER_COUNT" -eq 1 ]; then
-        "$PROJECT_DIR/scripts/update-mode.sh" A active --workers 1 --workflow simple --tasks-total 0 --tasks-done 0
+        "$SCRIPTS_DIR/update-mode.sh" A active --workers 1 --workflow simple --tasks-total 0 --tasks-done 0
     else
-        "$PROJECT_DIR/scripts/update-mode.sh" B active --workers "$WORKER_COUNT" --workflow default --tasks-total 0 --tasks-done 0
+        "$SCRIPTS_DIR/update-mode.sh" B active --workers "$WORKER_COUNT" --workflow default --tasks-total 0 --tasks-done 0
     fi
 fi

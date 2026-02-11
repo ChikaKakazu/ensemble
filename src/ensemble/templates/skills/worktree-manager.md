@@ -12,7 +12,7 @@ Git worktreeを使った並列開発を管理するスキル。
 ### worktree作成
 
 ```bash
-./scripts/worktree-create.sh <branch-name> [base-branch]
+.claude/scripts/worktree-create.sh <branch-name> [base-branch]
 ```
 
 - `branch-name`: 作成するブランチ名（ensemble/接頭辞が自動付与）
@@ -20,7 +20,7 @@ Git worktreeを使った並列開発を管理するスキル。
 
 例:
 ```bash
-./scripts/worktree-create.sh feature-auth main
+.claude/scripts/worktree-create.sh feature-auth main
 # → ../ensemble-feature-auth ディレクトリにworktreeが作成される
 # → ブランチ名: ensemble/feature-auth
 ```
@@ -28,14 +28,14 @@ Git worktreeを使った並列開発を管理するスキル。
 ### worktreeマージ
 
 ```bash
-./scripts/worktree-merge.sh <worktree-path>
+.claude/scripts/worktree-merge.sh <worktree-path>
 ```
 
 - `worktree-path`: マージするworktreeのパス
 
 例:
 ```bash
-./scripts/worktree-merge.sh ../ensemble-feature-auth
+.claude/scripts/worktree-merge.sh ../ensemble-feature-auth
 # → メインブランチにマージ
 # → コンフリクトがあれば報告
 ```
@@ -134,7 +134,7 @@ result = merge_worktree("../ensemble-feature-auth", auto_resolve=True)
 project-root/
 ├── ensemble/                    # メインリポジトリ
 │   ├── .git/
-│   ├── scripts/
+│   ├── .claude/scripts/
 │   │   ├── worktree-create.sh
 │   │   └── worktree-merge.sh
 │   └── src/
