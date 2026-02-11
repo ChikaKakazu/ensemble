@@ -20,7 +20,12 @@ def get_template_path(template_type: str) -> Path:
     Raises:
         ValueError: If template_type is not valid
     """
-    valid_types = {"agents", "commands", "workflows", "scripts"}
+    valid_types = {
+        "agents", "commands", "workflows", "scripts",
+        "instructions", "policies", "personas",
+        "output-contracts", "knowledge", "skills",
+        "hooks/scripts", "rules",
+    }
     if template_type not in valid_types:
         raise ValueError(f"Invalid template type: {template_type}. Must be one of {valid_types}")
 
@@ -66,10 +71,14 @@ def list_templates(template_type: str) -> list[str]:
     if not template_dir.exists():
         return []
 
-    if template_type in ("agents", "commands"):
+    md_types = {
+        "agents", "commands", "instructions", "policies",
+        "personas", "output-contracts", "knowledge", "skills", "rules",
+    }
+    if template_type in md_types:
         return [f.name for f in template_dir.glob("*.md")]
     elif template_type == "workflows":
         return [f.name for f in template_dir.glob("*.yaml")]
-    elif template_type == "scripts":
+    elif template_type in ("scripts", "hooks/scripts"):
         return [f.name for f in template_dir.glob("*.sh")]
     return []

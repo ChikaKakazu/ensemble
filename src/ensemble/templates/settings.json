@@ -1,0 +1,76 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Bash(git *)",
+      "Bash(tmux *)",
+      "Bash(uv *)",
+      "Bash(ls *)",
+      "Bash(mkdir *)",
+      "Skill(*)",
+      "Task(*)"
+    ]
+  },
+  "hooks": {
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Compaction triggered. On resume: check pane name, re-read agent definition.'",
+            "statusMessage": "Pre-compaction"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat status/dashboard.md 2>/dev/null || echo 'Dashboard not found'",
+            "statusMessage": "Loading dashboard"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/scripts/session-scan.sh",
+            "statusMessage": "Codebase scan",
+            "timeout": 15000
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/scripts/notify-stop.sh",
+            "statusMessage": "Completion notification",
+            "timeout": 3000
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/scripts/notify-error.sh",
+            "statusMessage": "Error notification",
+            "timeout": 3000
+          }
+        ]
+      }
+    ]
+  }
+}
