@@ -8,6 +8,7 @@ import click
 from ensemble import __version__
 from ensemble.autonomous_loop import AutonomousLoopRunner, LoopConfig, LoopStatus
 from ensemble.commands.init import init
+from ensemble.scanner import CodebaseScanner
 from ensemble.commands.issue import issue
 from ensemble.commands.launch import launch
 from ensemble.commands.upgrade import upgrade
@@ -197,6 +198,94 @@ def loop(
         sys.exit(3)
     else:
         sys.exit(0)
+
+
+@cli.command()
+@click.option(
+    "--format",
+    "output_format",
+    default="text",
+    type=click.Choice(["text", "json"]),
+    help="Output format (default: text)",
+)
+@click.option(
+    "--include",
+    multiple=True,
+    type=click.Choice(["todo", "issue", "progress", "all"]),
+    default=["all"],
+    help="Sources to include (default: all)",
+)
+def scan(output_format: str, include: tuple[str, ...]) -> None:
+    """Scan codebase and generate task candidates.
+
+    Analyzes the project for TODO/FIXME comments, open GitHub issues,
+    and unchecked items in PROGRESS.md/PLAN.md.
+
+    Examples:
+
+      # Full scan
+      ensemble scan
+
+      # Only TODOs
+      ensemble scan --include todo
+
+      # JSON output
+      ensemble scan --format json
+    """
+    import json as json_mod
+
+    scanner = CodebaseScanner(root_dir=Path.cwd())
+
+    include_set = set(include)
+    scan_all = "all" in include_set
+
+    tasks = []
+    errors = []
+
+    if scan_all or "todo" in include_set:
+        try:
+            tasks.extend(scanner.scan_todos())
+        except Exception as e:
+            errors.append(f"todo: {e}")
+
+    if scan_all or "issue" in include_set:
+        try:
+            tasks.extend(scanner.scan_github_issues())
+        except Exception as e:
+            errors.append(f"issue: {e}")
+
+    if scan_all or "progress" in include_set:
+        try:
+            tasks.extend(scanner.scan_progress_files())
+        except Exception as e:
+            errors.append(f"progress: {e}")
+
+    from ensemble.scanner import ScanResult
+
+    result = ScanResult(tasks=tasks, scan_errors=errors)
+
+    if output_format == "json":
+        data = {
+            "total": result.total,
+            "tasks": [
+                {
+                    "source": t.source,
+                    "title": t.title,
+                    "priority": t.priority.value,
+                    "file_path": t.file_path,
+                    "line_number": t.line_number,
+                    "description": t.description,
+                }
+                for t in result.sorted_by_priority()
+            ],
+            "errors": result.scan_errors,
+        }
+        click.echo(json_mod.dumps(data, indent=2, ensure_ascii=False))
+    else:
+        click.echo(result.format_text())
+
+    if result.total == 0:
+        click.echo("No task candidates found.")
 
 
 def main() -> None:
