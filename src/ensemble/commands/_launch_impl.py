@@ -215,7 +215,10 @@ def _create_sessions(session: str, project_root: Path, agents: dict[str, Path]) 
     # Create initial mode.md file
     status_dir = project_root / ".ensemble" / "status"
     status_dir.mkdir(parents=True, exist_ok=True)
-    update_mode_script = project_root / "scripts" / "update-mode.sh"
+    # スクリプトパス解決: .claude/scripts/ を優先、scripts/ にフォールバック
+    update_mode_script = project_root / ".claude" / "scripts" / "update-mode.sh"
+    if not update_mode_script.exists():
+        update_mode_script = project_root / "scripts" / "update-mode.sh"
     if update_mode_script.exists():
         subprocess.run(["bash", str(update_mode_script), "idle", "waiting"], check=False)
     else:

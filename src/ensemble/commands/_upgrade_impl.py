@@ -4,7 +4,7 @@ import shutil
 import difflib
 from datetime import datetime
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import click
 
@@ -15,6 +15,22 @@ from ensemble.version_tracker import (
     load_versions,
     record_file_version,
 )
+
+# All template categories: (template_type, glob_pattern, dest_subdir)
+TEMPLATE_CATEGORIES: list[tuple[str, str, str]] = [
+    ("agents", "*.md", "agents"),
+    ("commands", "*.md", "commands"),
+    ("scripts", "*.sh", "scripts"),
+    ("workflows", "*.yaml", "workflows"),
+    ("instructions", "*.md", "instructions"),
+    ("policies", "*.md", "policies"),
+    ("personas", "*.md", "personas"),
+    ("output-contracts", "*.md", "output-contracts"),
+    ("knowledge", "*.md", "knowledge"),
+    ("skills", "*.md", "skills"),
+    ("hooks/scripts", "*.sh", "hooks/scripts"),
+    ("rules", "*.md", "rules"),
+]
 
 
 def run_upgrade(dry_run: bool = False, force: bool = False, diff: bool = False) -> None:
@@ -43,11 +59,15 @@ def run_upgrade(dry_run: bool = False, force: bool = False, diff: bool = False) 
         click.echo("To customize agents locally, run: ensemble init --full --force")
         return
 
-    # Collect files to update
+    # Collect files to update from all template categories
     files_to_update = []
-    files_to_update.extend(_scan_directory("agents", project_root))
-    files_to_update.extend(_scan_directory("commands", project_root))
-    files_to_update.extend(_scan_scripts(project_root))
+    for template_type, glob_pattern, dest_subdir in TEMPLATE_CATEGORIES:
+        files_to_update.extend(
+            _scan_category(template_type, glob_pattern, dest_subdir, project_root)
+        )
+
+    # Also scan settings.json (single file, not a directory)
+    files_to_update.extend(_scan_settings_json(project_root))
 
     if not files_to_update:
         click.echo(click.style("All files are up to date!", fg="green"))
@@ -74,28 +94,35 @@ def run_upgrade(dry_run: bool = False, force: bool = False, diff: bool = False) 
         _print_summary(files_to_update, dry_run=False)
 
 
-def _scan_directory(template_type: str, project_root: Path) -> List[Tuple[str, str, str]]:
-    """Scan a template directory and determine what needs updating.
+def _scan_category(
+    template_type: str,
+    glob_pattern: str,
+    dest_subdir: str,
+    project_root: Path,
+) -> List[Tuple[str, str, str]]:
+    """Scan a template category and determine what needs updating.
 
     Args:
-        template_type: "agents" or "commands"
+        template_type: Template type (e.g., "agents", "hooks/scripts")
+        glob_pattern: Glob pattern for files (e.g., "*.md", "*.sh")
+        dest_subdir: Destination subdirectory under .claude/ (e.g., "agents", "hooks/scripts")
         project_root: Root directory of the project
 
     Returns:
         List of (status, relative_path, reason) tuples
         Status can be: "new", "update", "skip", "force_update"
     """
-    template_dir = get_template_path(template_type)
-    if not template_dir.exists():
+    template_dir = _get_template_path_safe(template_type)
+    if template_dir is None or not template_dir.exists():
         return []
 
-    local_dir = project_root / ".claude" / template_type
+    local_dir = project_root / ".claude" / dest_subdir
     if not local_dir.exists():
         return []
 
     results = []
 
-    for template_file in template_dir.glob("*.md"):
+    for template_file in template_dir.glob(glob_pattern):
         local_file = local_dir / template_file.name
         relative_path = str(local_file.relative_to(project_root))
 
@@ -114,47 +141,71 @@ def _scan_directory(template_type: str, project_root: Path) -> List[Tuple[str, s
                 # else: file is up to date, don't include in list
 
     return results
+
+
+def _scan_settings_json(project_root: Path) -> List[Tuple[str, str, str]]:
+    """Scan settings.json template and determine if it needs updating.
+
+    Args:
+        project_root: Root directory of the project
+
+    Returns:
+        List of (status, relative_path, reason) tuples
+    """
+    template_file = _get_template_path_safe("settings.json")
+    if template_file is None or not template_file.exists():
+        return []
+
+    local_file = project_root / ".claude" / "settings.json"
+    relative_path = str(local_file.relative_to(project_root))
+
+    if not local_file.exists():
+        return [("new", relative_path, "(new file)")]
+
+    # Check if file was modified by user
+    if check_file_modified(project_root, relative_path, local_file):
+        return [("skip", relative_path, "(modified locally, skipping)")]
+
+    # Check if template has changed
+    template_hash = compute_file_hash(template_file)
+    local_hash = compute_file_hash(local_file)
+    if template_hash != local_hash:
+        return [("update", relative_path, "(no local changes)")]
+
+    return []
+
+
+def _get_template_path_safe(template_type: str) -> Optional[Path]:
+    """Get template path without raising ValueError for extended types.
+
+    Handles both directory types (e.g., "agents") and file types (e.g., "settings.json").
+    """
+    try:
+        return get_template_path(template_type)
+    except ValueError:
+        # For types not in the original valid_types, use direct path
+        package_dir = Path(__file__).parent.parent / "templates"
+        path = package_dir / template_type
+        if path.exists():
+            return path
+        return None
+
+
+# Keep legacy functions as aliases for backward compatibility
+def _scan_directory(template_type: str, project_root: Path) -> List[Tuple[str, str, str]]:
+    """Legacy: Scan a template directory (agents/commands only).
+
+    Delegates to _scan_category with *.md glob pattern.
+    """
+    return _scan_category(template_type, "*.md", template_type, project_root)
 
 
 def _scan_scripts(project_root: Path) -> List[Tuple[str, str, str]]:
-    """Scan scripts directory and determine what needs updating.
+    """Legacy: Scan scripts directory.
 
-    Args:
-        project_root: Root directory of the project
-
-    Returns:
-        List of (status, relative_path, reason) tuples
-        Status can be: "new", "update", "skip", "force_update"
+    Delegates to _scan_category with correct .claude/scripts/ path.
     """
-    template_dir = get_template_path("scripts")
-    if not template_dir.exists():
-        return []
-
-    local_dir = project_root / "scripts"
-    if not local_dir.exists():
-        return []
-
-    results = []
-
-    for template_file in template_dir.glob("*.sh"):
-        local_file = local_dir / template_file.name
-        relative_path = str(local_file.relative_to(project_root))
-
-        if not local_file.exists():
-            results.append(("new", relative_path, "(new file)"))
-        else:
-            # Check if file was modified by user
-            if check_file_modified(project_root, relative_path, local_file):
-                results.append(("skip", relative_path, "(modified locally, skipping)"))
-            else:
-                # Check if template has changed
-                template_hash = compute_file_hash(template_file)
-                local_hash = compute_file_hash(local_file)
-                if template_hash != local_hash:
-                    results.append(("update", relative_path, "(no local changes)"))
-                # else: file is up to date, don't include in list
-
-    return results
+    return _scan_category("scripts", "*.sh", "scripts", project_root)
 
 
 def _get_status_icon(status: str) -> str:
@@ -254,8 +305,15 @@ def _apply_updates(files_to_update: List[Tuple[str, str, str]], project_root: Pa
             click.echo(click.style(f"  Warning: Template not found for {relative_path}", fg="yellow"))
             continue
 
+        # Ensure parent directory exists (for new files in new categories)
+        local_file.parent.mkdir(parents=True, exist_ok=True)
+
         # Copy file from template
         shutil.copy(template_file, local_file)
+
+        # Make shell scripts executable
+        if local_file.suffix == ".sh":
+            local_file.chmod(0o755)
 
         # Record new version
         record_file_version(project_root, relative_path, local_file)
@@ -273,29 +331,43 @@ def _create_backup(file_path: Path) -> None:
     click.echo(f"  Created backup: {backup_path.name}")
 
 
-def _get_template_file_for_relative_path(relative_path: str) -> Path:
+def _get_template_file_for_relative_path(relative_path: str) -> Optional[Path]:
     """Get template file path for a relative path.
 
     Args:
-        relative_path: Relative path like ".claude/agents/conductor.md" or "scripts/setup.sh"
+        relative_path: Relative path like ".claude/agents/conductor.md",
+                       ".claude/hooks/scripts/session-scan.sh",
+                       or ".claude/settings.json"
 
     Returns:
-        Path to the template file
+        Path to the template file, or None if not found
     """
     parts = Path(relative_path).parts
-
-    # Handle scripts/ directory
-    if relative_path.startswith("scripts/"):
-        filename = parts[-1]
-        return get_template_path("scripts") / filename
 
     # Handle .claude/ directory
     if ".claude" in parts:
         idx = parts.index(".claude")
-        if idx + 1 < len(parts):
-            template_type = parts[idx + 1]  # "agents" or "commands"
-            filename = parts[-1]
-            return get_template_path(template_type) / filename
+        remaining = parts[idx + 1:]  # Everything after .claude/
+
+        if not remaining:
+            return None
+
+        # Handle settings.json (single file directly under .claude/)
+        if len(remaining) == 1:
+            filename = remaining[0]
+            template_path = _get_template_path_safe(filename)
+            if template_path and template_path.is_file():
+                return template_path
+            return None
+
+        # Handle nested paths like hooks/scripts/session-scan.sh
+        # and simple paths like agents/conductor.md
+        filename = remaining[-1]
+        template_type = "/".join(remaining[:-1])  # e.g., "agents" or "hooks/scripts"
+
+        template_dir = _get_template_path_safe(template_type)
+        if template_dir and template_dir.is_dir():
+            return template_dir / filename
 
     return None
 

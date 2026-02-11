@@ -161,6 +161,15 @@ None
 *Last updated: -
 """
     dashboard.write_text(content)
+    click.echo("  Created .ensemble/status/dashboard.md")
+
+    # Also create status/dashboard.md at project root for backward compatibility
+    # (agent definitions and scripts reference status/dashboard.md)
+    project_root = ensemble_dir.parent
+    root_status_dir = project_root / "status"
+    root_status_dir.mkdir(parents=True, exist_ok=True)
+    root_dashboard = root_status_dir / "dashboard.md"
+    root_dashboard.write_text(content)
     click.echo("  Created status/dashboard.md")
 
 

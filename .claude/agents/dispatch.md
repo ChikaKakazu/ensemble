@@ -186,7 +186,7 @@ Dispatchは以下の場合に行動を開始する:
 1. queue/conductor/dispatch-instruction.yaml を読み込む
 2. worker_count を確認
 3. pane-setup.sh を実行してワーカーペインを起動:
-   ./scripts/pane-setup.sh ${worker_count}
+   .claude/scripts/pane-setup.sh ${worker_count}
 4. **重要**: ワーカーのClaude起動完了を待つ（スクリプト内で待機するが、追加で10秒待つ）
    sleep 10
 5. panes.env を再読み込み（ワーカーペインIDが追加されている）:
@@ -270,7 +270,7 @@ Ensembleは2ウィンドウ構成で動作する:
 cat queue/conductor/dispatch-instruction.yaml
 
 # 2. ワーカーペインを起動
-./scripts/pane-setup.sh ${worker_count}
+.claude/scripts/pane-setup.sh ${worker_count}
 
 # 3. panes.env を再読み込み
 source .ensemble/panes.env

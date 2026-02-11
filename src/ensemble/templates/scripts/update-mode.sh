@@ -2,7 +2,7 @@
 # scripts/update-mode.sh
 # Ensembleの実行モード（A/B/C/T/IDLE）を視覚化するASCIIアートを生成
 #
-# Usage: ./scripts/update-mode.sh <mode> <status> [options]
+# Usage: .claude/scripts/update-mode.sh <mode> <status> [options]
 # mode: idle|A|B|C|T
 # status: active|completed|error
 # options: --workers N --workflow NAME --tasks-total N --tasks-done N --worktrees N --teammates N

@@ -17,6 +17,15 @@ PROJECT_DIR="${PROJECT_DIR:-$(pwd)}"
 LOG_DIR="$PROJECT_DIR/logs"
 QUEUE_DIR="$PROJECT_DIR/queue"
 
+# スクリプトディレクトリの解決（.claude/scripts/ を優先、scripts/ にフォールバック）
+if [ -d "$PROJECT_DIR/.claude/scripts" ]; then
+    SCRIPTS_DIR="$PROJECT_DIR/.claude/scripts"
+elif [ -d "$PROJECT_DIR/scripts" ]; then
+    SCRIPTS_DIR="$PROJECT_DIR/scripts"
+else
+    SCRIPTS_DIR=""
+fi
+
 # Agent Teams モード検出
 AGENT_TEAMS_MODE="${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS:-0}"
 if [ "$AGENT_TEAMS_MODE" = "1" ]; then
@@ -82,8 +91,8 @@ echo "  Dashboard pane: $DASHBOARD_PANE"
 
 # 初期モード表示ファイルの作成
 mkdir -p "$PROJECT_DIR/.ensemble/status"
-if [ -f "$PROJECT_DIR/scripts/update-mode.sh" ]; then
-    bash "$PROJECT_DIR/scripts/update-mode.sh" idle waiting
+if [ -n "$SCRIPTS_DIR" ] && [ -f "$SCRIPTS_DIR/update-mode.sh" ]; then
+    bash "$SCRIPTS_DIR/update-mode.sh" idle waiting
 else
     # フォールバック: シンプルなIDLE表示
     cat > "$PROJECT_DIR/.ensemble/status/mode.md" << 'MODEEOF'
@@ -155,7 +164,7 @@ sleep 3
 
 # 右側のプレースホルダーにメッセージ表示
 tmux send-keys -t "$WORKER_AREA_PANE" \
-    "echo '=== Worker Area ===' && echo 'Run: ./scripts/pane-setup.sh [count]' && echo 'to add workers here.'"
+    "echo '=== Worker Area ===' && echo 'Run: .claude/scripts/pane-setup.sh [count]' && echo 'to add workers here.'"
 sleep 1
 tmux send-keys -t "$WORKER_AREA_PANE" Enter
 
@@ -188,10 +197,8 @@ EOF
 
 # inbox_watcher.shをバックグラウンドで起動
 echo "Starting inbox_watcher..."
-if [ -f "$PROJECT_DIR/scripts/inbox_watcher.sh" ]; then
-    INBOX_SCRIPT="$PROJECT_DIR/scripts/inbox_watcher.sh"
-elif [ -f "$PROJECT_DIR/src/ensemble/templates/scripts/inbox_watcher.sh" ]; then
-    INBOX_SCRIPT="$PROJECT_DIR/src/ensemble/templates/scripts/inbox_watcher.sh"
+if [ -n "$SCRIPTS_DIR" ] && [ -f "$SCRIPTS_DIR/inbox_watcher.sh" ]; then
+    INBOX_SCRIPT="$SCRIPTS_DIR/inbox_watcher.sh"
 else
     echo "Warning: inbox_watcher.sh not found. Event-driven notifications disabled."
     INBOX_SCRIPT=""
@@ -235,7 +242,7 @@ echo "To view both simultaneously, open two terminal windows:"
 echo "  Terminal 1: tmux attach -t $SESSION_CONDUCTOR"
 echo "  Terminal 2: tmux attach -t $SESSION_WORKERS"
 echo ""
-echo "Add workers: ./scripts/pane-setup.sh [count]"
+echo "Add workers: .claude/scripts/pane-setup.sh [count]"
 echo ""
 if [ "$AGENT_TEAMS_MODE" = "1" ]; then
     echo "=== Agent Teams Mode ==="
