@@ -20,6 +20,7 @@
 
 ## 進行中
 
+- [x] `/go` Phase 6: タスク完了後の次タスク探索（`--continuous`オプション）
 - [ ] ensemble investigate コマンド (scan結果のAgent Teams調査)
 - [ ] scannerのテストファイル除外オプション
 
@@ -32,6 +33,9 @@
   - [ ] P3-1: CI/CDパイプライン強化
   - [ ] P3-2: Bloom's Taxonomy モデル選択最適化
   - [ ] P3-3: Skills Discovery自動化
+- [ ] Conductor自律ループ: scan→計画→実行→レビュー→scan の自動継続モード
+- [ ] `ensemble loop`とマルチエージェント構成の統合
+- [ ] Worker完了後のDispatch経由次タスク自動プッシュ
 - [ ] ensemble scan → investigate → 実行 の自動パイプライン
 - [ ] dashboard-update.sh 複数ペイン対応
 
