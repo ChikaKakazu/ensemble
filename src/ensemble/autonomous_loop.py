@@ -96,16 +96,19 @@ class AutonomousLoopRunner:
         work_dir: Path,
         config: LoopConfig | None = None,
         use_queue: bool = False,
+        use_scan: bool = False,
     ) -> None:
         """
         Args:
             work_dir: 作業ディレクトリ
             config: ループ設定（Noneならデフォルト）
             use_queue: TaskQueueからタスクを取得するモード
+            use_scan: CodebaseScannerからタスクを取得するモード
         """
         self.work_dir = work_dir
         self.config = config or LoopConfig()
         self.use_queue = use_queue
+        self.use_scan = use_scan
         self.iteration = 0
         self.logger = NDJSONLogger()
 
@@ -118,8 +121,8 @@ class AutonomousLoopRunner:
         commits: list[str] = []
         errors: list[str] = []
 
-        # プロンプトファイル確認（キューモードでない場合）
-        if not self.use_queue:
+        # プロンプトファイル確認（キュー/スキャンモードでない場合）
+        if not self.use_queue and not self.use_scan:
             prompt_path = self.work_dir / self.config.prompt_file
             if not prompt_path.exists():
                 self.logger.log_event(
@@ -151,8 +154,21 @@ class AutonomousLoopRunner:
         for i in range(self.config.max_iterations):
             self.iteration = i + 1
 
-            # キューモードの場合、タスクを取得
-            if self.use_queue:
+            # タスク取得モード分岐
+            if self.use_scan:
+                task_command = self._get_scan_task()
+                if task_command is None:
+                    self.logger.log_event(
+                        "loop_scan_empty",
+                        {"iteration": self.iteration},
+                    )
+                    return LoopResult(
+                        iterations_completed=i,
+                        status=LoopStatus.QUEUE_EMPTY,
+                        commits=commits,
+                        errors=errors,
+                    )
+            elif self.use_queue:
                 task_command = self._get_queue_task()
                 if task_command is None:
                     self.logger.log_event(
@@ -329,6 +345,50 @@ class AutonomousLoopRunner:
             return hash_result.stdout.strip() if hash_result.returncode == 0 else None
 
         except subprocess.CalledProcessError:
+            return None
+
+    def _get_scan_task(self) -> str | None:
+        """CodebaseScannerからタスクを取得する
+
+        Returns:
+            タスクコマンド（タスクなしの場合はNone）
+        """
+        try:
+            from ensemble.scanner import CodebaseScanner
+
+            scanner = CodebaseScanner(root_dir=self.work_dir, exclude_tests=True)
+            result = scanner.scan()
+
+            if result.total == 0:
+                return None
+
+            # 最も優先度の高いタスクを選択
+            sorted_tasks = result.sorted_by_priority()
+            task = sorted_tasks[0]
+
+            # タスクの情報をプロンプトとして構築
+            prompt_parts = [
+                f"Fix the following issue in this project:",
+                f"",
+                f"Task: {task.title}",
+                f"Source: {task.source}",
+                f"Priority: {task.priority.value}",
+            ]
+            if task.file_path:
+                prompt_parts.append(f"File: {task.file_path}")
+                if task.line_number:
+                    prompt_parts.append(f"Line: {task.line_number}")
+            if task.description:
+                prompt_parts.append(f"Description: {task.description}")
+
+            prompt_parts.extend([
+                "",
+                "Please fix this issue, write tests if needed, and ensure all existing tests pass.",
+            ])
+
+            return "\n".join(prompt_parts)
+
+        except Exception:
             return None
 
     def _get_queue_task(self) -> str | None:
