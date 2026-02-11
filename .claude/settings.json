@@ -42,6 +42,16 @@
             "statusMessage": "ダッシュボード読み込み"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/scripts/session-scan.sh",
+            "statusMessage": "コードベーススキャン",
+            "timeout": 15000
+          }
+        ]
       }
     ],
     "Stop": [

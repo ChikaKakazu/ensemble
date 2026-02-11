@@ -9,6 +9,7 @@ description: |
     /go --parallel タスク内容   - パターンB強制（tmux並列）
     /go --worktree タスク内容   - パターンC強制（git worktree）
     /go --teams タスク内容      - モードT強制（Agent Teams調査・レビュー）
+    /go --confirm タスク内容    - 次タスク移行前にユーザー確認を挟む
 ---
 
 以下のタスクをEnsembleのConductorとして実行してください。
@@ -27,11 +28,23 @@ $ARGUMENTS
 | `--parallel` | パターンBを強制（tmux並列実行） |
 | `--worktree` | パターンCを強制（git worktree分離） |
 | `--teams` | モードTを強制（Agent Teamsで調査・レビュー実行） |
+| `--confirm` | 次タスク移行前にユーザー確認を挟む（デフォルトは確認なしで自動継続） |
 | オプションなし | タスク内容から自動判定 |
 
 オプションが指定された場合、計画策定時のパターン判定をスキップし、指定されたパターンで実行してください。
 
 ## 実行手順
+
+### Phase 0: タスク発見（自動）
+
+SessionStartフックにより `ensemble scan --exclude-tests` が自動実行され、
+タスク候補がコンテキストに表示されている。タスクが明示的に指定されていない場合は、
+scan結果から最優先タスクを選択するか、`ensemble investigate` で詳細調査を実行する。
+
+タスク発見コマンド:
+- `ensemble scan --exclude-tests` - タスク候補一覧
+- `ensemble investigate --strategy inline` - 高速調査
+- `ensemble investigate --strategy agent_teams` - Agent Teamsで並列調査
 
 ### Phase 1: 計画策定
 
@@ -136,6 +149,31 @@ done
    - 成果物の一覧
    - 変更ファイルの一覧
    - 残課題（あれば）
+
+### Phase 6: 次タスク探索（自律継続）
+
+9. タスク完了後、自動的に次のタスクを探索し継続する:
+
+   **デフォルト動作（確認なしで自動継続）**:
+   - `ensemble scan --exclude-tests` を自動実行
+   - タスク候補が見つかれば、最優先タスクを自動選択
+   - **確認なしで即座に Phase 1 に戻り継続実行**
+   - タスク候補がなければ「全タスク完了。待機中。」と表示して停止
+
+   **`--confirm` オプションが指定されている場合**:
+   - `ensemble scan --exclude-tests` を自動実行
+   - タスク候補が見つかれば、上位3件を表示:
+     ```
+     残タスク候補: {N}件
+     上位3件:
+       1. [priority] タスク名
+       2. [priority] タスク名
+       3. [priority] タスク名
+
+     次のタスクを実行しますか？
+     ```
+   - ユーザーの承認を待ち、承認されたら Phase 1 に戻って継続
+   - 拒否されたら停止
 
 ## 注意事項
 

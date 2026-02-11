@@ -255,8 +255,11 @@ def _create_sessions(session: str, project_root: Path, agents: dict[str, Path]) 
         check=True,
     )
 
+    # Ensure status directory exists for dashboard
+    (project_root / "status").mkdir(parents=True, exist_ok=True)
+
     # Start dashboard in Dashboard pane (right) with watch for periodic refresh
-    dashboard_path = project_root / ".ensemble" / "status" / "dashboard.md"
+    dashboard_path = project_root / "status" / "dashboard.md"
     subprocess.run(
         ["tmux", "send-keys", "-t", f"{conductor_session}:main.1", f"watch -n 5 -t cat {dashboard_path}"],
         check=True,

@@ -33,6 +33,9 @@ mkdir -p "$LOG_DIR"
 # キューディレクトリ作成
 mkdir -p "$QUEUE_DIR/tasks" "$QUEUE_DIR/processing" "$QUEUE_DIR/reports" "$QUEUE_DIR/ack" "$QUEUE_DIR/conductor"
 
+# ステータスディレクトリ作成
+mkdir -p "$PROJECT_DIR/status"
+
 # 既存セッションがあれば削除
 if tmux has-session -t "$SESSION_CONDUCTOR" 2>/dev/null; then
     echo "Killing existing conductor session..."
@@ -102,7 +105,7 @@ tmux send-keys -t "$CONDUCTOR_PANE" Enter
 # dashboard (watch for periodic refresh, Ctrl+C to stop)
 echo "Starting Dashboard monitor (in conductor session)..."
 tmux send-keys -t "$DASHBOARD_PANE" \
-    "watch -n 5 -t cat .ensemble/status/dashboard.md"
+    "watch -n 5 -t cat status/dashboard.md"
 sleep 1
 tmux send-keys -t "$DASHBOARD_PANE" Enter
 
