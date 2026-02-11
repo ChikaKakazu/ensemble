@@ -1,5 +1,8 @@
 """Tests for CI/CD Pipeline Mode."""
 
+import subprocess
+from unittest.mock import MagicMock, patch
+
 import pytest
 from click.testing import CliRunner
 
@@ -118,3 +121,213 @@ def test_pipeline_runner_branch_name_cleanup():
     # 連続するハイフンは1つに統合される（スペース→ハイフン変換後）
     runner3 = PipelineRunner(task="Fix  multiple  spaces", workflow="default")
     assert "--" not in runner3.branch
+
+
+# ============================================================
+# subprocess系メソッドのテスト（13件追加）
+# ============================================================
+
+
+# _execute_task() のテスト (4件)
+@patch("ensemble.pipeline.subprocess.run")
+def test_execute_task_success(mock_run):
+    """Test _execute_task with successful claude CLI execution."""
+    mock_run.return_value = MagicMock(returncode=0, stdout="Task completed", stderr="")
+
+    runner = PipelineRunner(task="Fix bug", workflow="simple")
+    result = runner._execute_task()
+
+    assert result == EXIT_SUCCESS
+    mock_run.assert_called_once()
+    args = mock_run.call_args[0][0]
+    assert args[0] == "claude"
+    assert "Fix bug" in args
+
+
+@patch("ensemble.pipeline.subprocess.run")
+def test_execute_task_cli_failure(mock_run):
+    """Test _execute_task with claude CLI failure."""
+    mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="Error occurred")
+
+    runner = PipelineRunner(task="Fix bug", workflow="simple")
+    result = runner._execute_task()
+
+    assert result == EXIT_ERROR
+
+
+@patch("ensemble.pipeline.subprocess.run")
+def test_execute_task_timeout(mock_run):
+    """Test _execute_task with timeout."""
+    mock_run.side_effect = subprocess.TimeoutExpired(cmd="claude", timeout=600)
+
+    runner = PipelineRunner(task="Fix bug", workflow="simple")
+    result = runner._execute_task()
+
+    assert result == EXIT_ERROR
+
+
+@patch("ensemble.pipeline.subprocess.run")
+def test_execute_task_cli_not_found(mock_run):
+    """Test _execute_task with claude CLI not found."""
+    mock_run.side_effect = FileNotFoundError("claude CLI not found")
+
+    runner = PipelineRunner(task="Fix bug", workflow="simple")
+    result = runner._execute_task()
+
+    assert result == EXIT_ERROR
+
+
+# _run_review() のテスト (4件)
+@patch("ensemble.pipeline.subprocess.run")
+def test_run_review_approved(mock_run):
+    """Test _run_review with approved result."""
+    mock_run.return_value = MagicMock(
+        returncode=0,
+        stdout="Review completed. All checks passed. approved",
+        stderr=""
+    )
+
+    runner = PipelineRunner(task="Fix bug", workflow="default")
+    result = runner._run_review()
+
+    assert result == EXIT_SUCCESS
+
+
+@patch("ensemble.pipeline.subprocess.run")
+def test_run_review_needs_fix(mock_run):
+    """Test _run_review with needs_fix result."""
+    mock_run.return_value = MagicMock(
+        returncode=0,
+        stdout="Review completed. Found issues. needs_fix: Missing tests",
+        stderr=""
+    )
+
+    runner = PipelineRunner(task="Fix bug", workflow="default")
+    result = runner._run_review()
+
+    assert result == EXIT_NEEDS_FIX
+
+
+@patch("ensemble.pipeline.subprocess.run")
+def test_run_review_cli_failure(mock_run):
+    """Test _run_review with claude CLI failure."""
+    mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="CLI error")
+
+    runner = PipelineRunner(task="Fix bug", workflow="default")
+    result = runner._run_review()
+
+    assert result == EXIT_ERROR
+
+
+@patch("ensemble.pipeline.subprocess.run")
+def test_run_review_timeout(mock_run):
+    """Test _run_review with timeout."""
+    mock_run.side_effect = subprocess.TimeoutExpired(cmd="claude", timeout=300)
+
+    runner = PipelineRunner(task="Fix bug", workflow="default")
+    result = runner._run_review()
+
+    assert result == EXIT_ERROR
+
+
+# run() の統合テスト (2件)
+@patch("ensemble.pipeline.subprocess.run")
+def test_run_full_pipeline_success(mock_run):
+    """Test run() with full pipeline success (simple workflow)."""
+    # git checkout -b: 成功
+    # claude task execution: 成功
+    # git add .: 成功
+    # git commit: 成功
+    mock_run.return_value = MagicMock(returncode=0, stdout="Success", stderr="")
+
+    runner = PipelineRunner(task="Fix bug", workflow="simple", auto_pr=False)
+    result = runner.run()
+
+    assert result == EXIT_SUCCESS
+    # git checkout -b, claude, git add, git commit の4回呼ばれる
+    assert mock_run.call_count >= 4
+
+
+@patch("ensemble.pipeline.subprocess.run")
+def test_run_pipeline_task_failure_stops(mock_run):
+    """Test run() stops when task execution fails."""
+    def side_effect(*args, **kwargs):
+        cmd = args[0]
+        if cmd[0] == "git" and cmd[1] == "checkout":
+            return MagicMock(returncode=0)
+        elif cmd[0] == "claude":
+            return MagicMock(returncode=1, stderr="Task failed")
+        else:
+            return MagicMock(returncode=0)
+
+    mock_run.side_effect = side_effect
+
+    runner = PipelineRunner(task="Fix bug", workflow="simple", auto_pr=False)
+    result = runner.run()
+
+    assert result == EXIT_ERROR
+    # git checkoutとclaude実行のみ（commitまで到達しない）
+    assert mock_run.call_count == 2
+
+
+# _create_branch() のテスト (1件)
+@patch("ensemble.pipeline.subprocess.run")
+def test_create_branch(mock_run):
+    """Test _create_branch calls git checkout -b."""
+    mock_run.return_value = MagicMock(returncode=0)
+
+    runner = PipelineRunner(task="Fix bug", workflow="simple")
+    runner._create_branch()
+
+    mock_run.assert_called_once()
+    args = mock_run.call_args[0][0]
+    assert args[0] == "git"
+    assert args[1] == "checkout"
+    assert args[2] == "-b"
+    assert runner.branch in args
+
+
+# _commit_changes() のテスト (1件)
+@patch("ensemble.pipeline.subprocess.run")
+def test_commit_changes(mock_run):
+    """Test _commit_changes calls git add and git commit."""
+    mock_run.return_value = MagicMock(returncode=0)
+
+    runner = PipelineRunner(task="Fix bug", workflow="simple")
+    runner._commit_changes()
+
+    assert mock_run.call_count == 2
+    # First call: git add .
+    first_call_args = mock_run.call_args_list[0][0][0]
+    assert first_call_args[0] == "git"
+    assert first_call_args[1] == "add"
+    assert first_call_args[2] == "."
+
+    # Second call: git commit
+    second_call_args = mock_run.call_args_list[1][0][0]
+    assert second_call_args[0] == "git"
+    assert second_call_args[1] == "commit"
+    assert second_call_args[2] == "-m"
+
+
+# _create_pr() のテスト (1件)
+@patch("ensemble.pipeline.subprocess.run")
+def test_create_pr(mock_run):
+    """Test _create_pr calls git push and gh pr create."""
+    mock_run.return_value = MagicMock(returncode=0)
+
+    runner = PipelineRunner(task="Fix bug", workflow="simple")
+    runner._create_pr()
+
+    assert mock_run.call_count == 2
+    # First call: git push
+    first_call_args = mock_run.call_args_list[0][0][0]
+    assert first_call_args[0] == "git"
+    assert first_call_args[1] == "push"
+    assert first_call_args[2] == "-u"
+
+    # Second call: gh pr create
+    second_call_args = mock_run.call_args_list[1][0][0]
+    assert second_call_args[0] == "gh"
+    assert second_call_args[1] == "pr"
+    assert second_call_args[2] == "create"

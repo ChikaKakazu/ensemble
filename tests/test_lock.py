@@ -58,6 +58,30 @@ class TestAtomicWrite:
         result = atomic_write(str(filepath), "content")
         assert result is False
 
+    def test_atomic_write_empty_content(self, tmp_path: Path) -> None:
+        """空文字列の書き込みが正しく動作する"""
+        filepath = tmp_path / "empty.txt"
+        content = ""
+
+        result = atomic_write(str(filepath), content)
+
+        assert result is True
+        assert filepath.exists()
+        assert filepath.read_text() == ""
+
+    def test_atomic_write_large_content(self, tmp_path: Path) -> None:
+        """大きなコンテンツ（1MB）の書き込みが正しく動作する"""
+        filepath = tmp_path / "large.txt"
+        # 1MB = 1,048,576 bytes
+        content = "a" * (1024 * 1024)
+
+        result = atomic_write(str(filepath), content)
+
+        assert result is True
+        assert filepath.exists()
+        assert len(filepath.read_text()) == 1024 * 1024
+        assert filepath.read_text() == content
+
 
 class TestAtomicClaim:
     """atomic_claim のテスト"""
@@ -120,6 +144,21 @@ class TestAtomicClaim:
         assert result is not None
         claimed_file = Path(result)
         assert claimed_file.read_text() == original_content
+
+    def test_atomic_claim_to_nonexistent_processing_dir(self, tmp_path: Path) -> None:
+        """処理中ディレクトリが存在しない場合はNoneを返す"""
+        source = tmp_path / "tasks" / "task.yaml"
+        processing = tmp_path / "nonexistent_processing"
+
+        source.parent.mkdir(parents=True)
+        source.write_text("task content")
+
+        # 処理中ディレクトリが存在しないのでNone
+        result = atomic_claim(str(source), str(processing))
+
+        assert result is None
+        # ソースファイルは移動されていない
+        assert source.exists()
 
 
 class TestAtomicWriteWithLock:
@@ -237,6 +276,42 @@ class TestAtomicWriteWithLock:
         result = atomic_write_with_lock(str(filepath), content)
 
         assert result is True
+        assert filepath.read_text() == content
+
+    def test_atomic_write_with_lock_timeout(self, tmp_path: Path) -> None:
+        """タイムアウトテスト（ロック取得失敗のモック）"""
+        filepath = tmp_path / "timeout.txt"
+        content = "timeout test"
+
+        # fcntl.flockを常にBlockingIOErrorを発生させるようモック
+        with patch("ensemble.lock.fcntl.flock", side_effect=BlockingIOError):
+            result = atomic_write_with_lock(str(filepath), content, timeout=0.5)
+
+        # タイムアウトで失敗
+        assert result is False
+
+    def test_atomic_write_with_lock_retry_success(self, tmp_path: Path) -> None:
+        """リトライ後に成功するケース"""
+        filepath = tmp_path / "retry.txt"
+        content = "retry test"
+
+        # 最初の2回は失敗、3回目で成功するようモック
+        call_count = 0
+
+        def mock_flock(fd: int, operation: int) -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 2:
+                raise BlockingIOError("Lock failed")
+            # 3回目以降は成功（何もしない）
+            return None
+
+        with patch("ensemble.lock.fcntl.flock", side_effect=mock_flock):
+            result = atomic_write_with_lock(str(filepath), content, timeout=1.0)
+
+        # 最終的に成功
+        assert result is True
+        assert filepath.exists()
         assert filepath.read_text() == content
 
 
