@@ -48,19 +48,36 @@ def run_init(full: bool = False, force: bool = False) -> None:
 
 
 def _create_directories(ensemble_dir: Path) -> None:
-    """Create the .ensemble directory structure."""
-    dirs = [
+    """Create the .ensemble directory structure and runtime directories.
+
+    Runtime directories (queue/, status/, logs/) are created at project root
+    because all agent definitions and scripts reference them relative to the
+    project root, not inside .ensemble/.
+    """
+    project_root = ensemble_dir.parent
+
+    # .ensemble internal directories
+    ensemble_dirs = [
         ensemble_dir,
-        ensemble_dir / "queue" / "conductor",
-        ensemble_dir / "queue" / "tasks",
-        ensemble_dir / "queue" / "reports",
-        ensemble_dir / "queue" / "ack",
         ensemble_dir / "status",
     ]
 
-    for dir_path in dirs:
+    # Runtime directories at project root (used by agents, scripts, inbox_watcher)
+    runtime_dirs = [
+        project_root / "queue" / "conductor",
+        project_root / "queue" / "tasks",
+        project_root / "queue" / "reports",
+        project_root / "queue" / "ack",
+        project_root / "logs",
+    ]
+
+    for dir_path in ensemble_dirs:
         dir_path.mkdir(parents=True, exist_ok=True)
-        click.echo(f"  Created {dir_path.relative_to(ensemble_dir.parent)}")
+        click.echo(f"  Created {dir_path.relative_to(project_root)}")
+
+    for dir_path in runtime_dirs:
+        dir_path.mkdir(parents=True, exist_ok=True)
+        click.echo(f"  Created {dir_path.relative_to(project_root)}")
 
 
 def _setup_claude_md(project_root: Path, force: bool) -> None:
@@ -77,8 +94,8 @@ This project uses Ensemble for AI-powered development orchestration.
 - `/status` - View current progress
 
 ### Communication Protocol
-- Agent communication via file-based queue (.ensemble/queue/)
-- Dashboard updates in .ensemble/status/dashboard.md
+- Agent communication via file-based queue (queue/)
+- Dashboard updates in status/dashboard.md
 
 For more information, see the [Ensemble documentation](https://github.com/ChikaKakazu/ensemble).
 '''
@@ -126,12 +143,16 @@ def _update_gitignore(project_root: Path) -> None:
     """Update .gitignore with Ensemble exclusions."""
     gitignore = project_root / ".gitignore"
     ensemble_ignores = """
-# Ensemble
-.ensemble/queue/
-.ensemble/panes.env
-status/
+# Ensemble runtime directories
 queue/
+status/
 logs/
+
+# Ensemble internal
+.ensemble/panes.env
+.ensemble/status/
+.ensemble/logs/
+.ensemble/inbox_watcher.pid
 """
 
     if gitignore.exists():

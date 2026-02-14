@@ -3,14 +3,15 @@
 # SessionStart時にensemble scanを実行し、タスク候補をサマリー表示する。
 # フックの出力はClaudeのコンテキストに入るため、簡潔にする。
 
-# ensemble CLIが利用可能か確認
-if ! command -v uv &>/dev/null; then
-    echo "[scan] uv not found, skipping scan"
+# scan実行（uv優先、ensembleコマンド直接にフォールバック）
+if command -v uv &>/dev/null; then
+    SCAN_OUTPUT=$(uv run ensemble scan --exclude-tests --format json 2>/dev/null)
+elif command -v ensemble &>/dev/null; then
+    SCAN_OUTPUT=$(ensemble scan --exclude-tests --format json 2>/dev/null)
+else
+    echo "[scan] Neither uv nor ensemble found, skipping scan"
     exit 0
 fi
-
-# scan実行（テストファイル除外、出力を制限）
-SCAN_OUTPUT=$(uv run ensemble scan --exclude-tests --format json 2>/dev/null)
 
 if [ $? -ne 0 ]; then
     echo "[scan] scan failed or not available"

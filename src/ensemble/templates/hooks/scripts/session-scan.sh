@@ -3,14 +3,15 @@
 # SessionStart hook: scan codebase for task candidates on session start.
 # Hook output goes into Claude's context, so keep it concise.
 
-# Check if ensemble CLI is available
-if ! command -v uv &>/dev/null; then
-    echo "[scan] uv not found, skipping scan"
+# Run scan (try uv first, then direct ensemble command)
+if command -v uv &>/dev/null; then
+    SCAN_OUTPUT=$(uv run ensemble scan --exclude-tests --format json 2>/dev/null)
+elif command -v ensemble &>/dev/null; then
+    SCAN_OUTPUT=$(ensemble scan --exclude-tests --format json 2>/dev/null)
+else
+    echo "[scan] Neither uv nor ensemble found, skipping scan"
     exit 0
 fi
-
-# Run scan (exclude test files, limit output)
-SCAN_OUTPUT=$(uv run ensemble scan --exclude-tests --format json 2>/dev/null)
 
 if [ $? -ne 0 ]; then
     echo "[scan] scan failed or not available"
