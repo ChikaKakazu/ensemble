@@ -56,14 +56,17 @@ class TestInitCommand:
         result = runner.invoke(cli, ["init"])
         assert result.exit_code == 0
 
-        # Check directories
+        # Check .ensemble internal directories
         assert (temp_project / ".ensemble").exists()
-        assert (temp_project / ".ensemble" / "queue").exists()
-        assert (temp_project / ".ensemble" / "queue" / "conductor").exists()
-        assert (temp_project / ".ensemble" / "queue" / "tasks").exists()
-        assert (temp_project / ".ensemble" / "queue" / "reports").exists()
-        assert (temp_project / ".ensemble" / "queue" / "ack").exists()
         assert (temp_project / ".ensemble" / "status").exists()
+
+        # Check runtime directories at project root
+        assert (temp_project / "queue").exists()
+        assert (temp_project / "queue" / "conductor").exists()
+        assert (temp_project / "queue" / "tasks").exists()
+        assert (temp_project / "queue" / "reports").exists()
+        assert (temp_project / "queue" / "ack").exists()
+        assert (temp_project / "logs").exists()
 
     def test_init_creates_claude_md(self, runner, temp_project):
         """Test that init creates CLAUDE.md."""
@@ -85,7 +88,7 @@ class TestInitCommand:
         assert gitignore.exists()
         content = gitignore.read_text()
         assert "# Ensemble" in content
-        assert ".ensemble/queue/" in content
+        assert "queue/" in content
 
     def test_init_appends_to_existing_gitignore(self, runner, temp_project):
         """Test that init appends to existing .gitignore."""

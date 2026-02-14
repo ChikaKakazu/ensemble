@@ -24,6 +24,16 @@ build/
 .venv/
 venv/
 
+# Secrets
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+credentials.json
+credentials.yaml
+
 # IDE
 .idea/
 .vscode/

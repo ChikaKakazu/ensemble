@@ -15,6 +15,7 @@ Claudeを無限ループで実行し、タスク完了→次タスク取得を�
 
 from __future__ import annotations
 
+import hashlib
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -22,6 +23,7 @@ from enum import Enum
 from pathlib import Path
 
 from ensemble.logger import NDJSONLogger
+from ensemble.loop_detector import LoopDetector
 
 
 class LoopStatus(Enum):
@@ -111,6 +113,8 @@ class AutonomousLoopRunner:
         self.use_scan = use_scan
         self.iteration = 0
         self.logger = NDJSONLogger()
+        self.loop_detector = LoopDetector(max_iterations=5)
+        self._processed_scan_keys: set[str] = set()
 
     def run(self) -> LoopResult:
         """ループを実行する
@@ -151,10 +155,17 @@ class AutonomousLoopRunner:
             },
         )
 
+        # queueモード用のインスタンスを事前作成
+        queue_instance = None
+        if self.use_queue:
+            from ensemble.queue import TaskQueue
+            queue_instance = TaskQueue(base_dir=self.work_dir / "queue")
+
         for i in range(self.config.max_iterations):
             self.iteration = i + 1
 
             # タスク取得モード分岐
+            current_task_id: str | None = None
             if self.use_scan:
                 task_command = self._get_scan_task()
                 if task_command is None:
@@ -168,9 +179,11 @@ class AutonomousLoopRunner:
                         commits=commits,
                         errors=errors,
                     )
+                # scanモード用のタスクキー生成（重複検知用）
+                current_task_id = self._make_scan_task_key(task_command)
             elif self.use_queue:
-                task_command = self._get_queue_task()
-                if task_command is None:
+                task_data = self._claim_queue_task(queue_instance)
+                if task_data is None:
                     self.logger.log_event(
                         "loop_queue_empty",
                         {"iteration": self.iteration},
@@ -181,8 +194,25 @@ class AutonomousLoopRunner:
                         commits=commits,
                         errors=errors,
                     )
+                current_task_id = task_data.get("task_id")
+                task_command = task_data.get("command")
             else:
                 task_command = None  # プロンプトファイルモード
+                current_task_id = f"prompt-iteration-{self.iteration}"
+
+            # ループ検知
+            if current_task_id and self.loop_detector.record(current_task_id):
+                count = self.loop_detector.get_count(current_task_id)
+                self.logger.log_event(
+                    "loop_detected",
+                    {"task_id": current_task_id, "count": count},
+                )
+                return LoopResult(
+                    iterations_completed=i,
+                    status=LoopStatus.LOOP_DETECTED,
+                    commits=commits,
+                    errors=errors + [f"Loop detected: {current_task_id} ({count} times)"],
+                )
 
             # イテレーション実行
             self.logger.log_event(
@@ -203,6 +233,18 @@ class AutonomousLoopRunner:
                     "iteration_complete",
                     {"iteration": self.iteration},
                 )
+
+            # queueモード: タスク完了報告
+            if self.use_queue and queue_instance and current_task_id:
+                try:
+                    if success:
+                        queue_instance.complete(current_task_id, result="success", output="")
+                    else:
+                        queue_instance.complete(
+                            current_task_id, result="error", output="", error=error
+                        )
+                except Exception:
+                    pass  # 完了報告失敗はログのみ
 
             # コミット（成功時のみ、commit_each=Trueの場合）
             if self.config.commit_each and success:
@@ -299,6 +341,29 @@ class AutonomousLoopRunner:
         except FileNotFoundError:
             return False, f"Iteration {self.iteration}: claude CLI not found"
 
+    # 機密ファイルパターン（git add から除外）
+    _SENSITIVE_PATTERNS = {
+        ".env", ".env.local", ".env.production", ".env.staging",
+        "credentials.json", "credentials.yaml",
+        "secret", "token",
+    }
+    _SENSITIVE_EXTENSIONS = {".key", ".pem", ".p12", ".pfx", ".jks"}
+
+    def _is_sensitive_file(self, filepath: str) -> bool:
+        """機密ファイルかどうかを判定する"""
+        name = filepath.lower().split("/")[-1]
+        # 完全一致チェック
+        if name in self._SENSITIVE_PATTERNS:
+            return True
+        # 部分一致チェック
+        if any(p in name for p in ("secret", "credential", "token", "api_key", "apikey")):
+            return True
+        # 拡張子チェック
+        for ext in self._SENSITIVE_EXTENSIONS:
+            if name.endswith(ext):
+                return True
+        return False
+
     def _commit_iteration(self) -> str | None:
         """イテレーション後にgitコミットする
 
@@ -306,20 +371,37 @@ class AutonomousLoopRunner:
             コミットハッシュ（変更なしの場合はNone）
         """
         try:
-            # 変更があるか確認
+            # 変更ファイル一覧を取得
             diff_result = subprocess.run(
-                ["git", "diff", "--stat"],
+                ["git", "diff", "--name-only"],
                 capture_output=True,
                 text=True,
                 cwd=str(self.work_dir),
             )
 
-            if not diff_result.stdout.strip():
+            # 未追跡ファイルも含める
+            untracked_result = subprocess.run(
+                ["git", "ls-files", "--others", "--exclude-standard"],
+                capture_output=True,
+                text=True,
+                cwd=str(self.work_dir),
+            )
+
+            changed_files = [
+                f for f in (diff_result.stdout.strip() + "\n" + untracked_result.stdout.strip()).split("\n")
+                if f.strip()
+            ]
+
+            if not changed_files:
                 return None
 
-            # git add .
+            # 機密ファイルを除外して個別にadd
+            safe_files = [f for f in changed_files if not self._is_sensitive_file(f)]
+            if not safe_files:
+                return None
+
             subprocess.run(
-                ["git", "add", "."],
+                ["git", "add"] + safe_files,
                 check=True,
                 capture_output=True,
                 cwd=str(self.work_dir),
@@ -347,6 +429,23 @@ class AutonomousLoopRunner:
         except subprocess.CalledProcessError:
             return None
 
+    def _make_scan_task_key(self, task_command: str) -> str:
+        """scanモードのタスクコマンドからユニークキーを生成する"""
+        return hashlib.md5(task_command.encode()).hexdigest()[:12]
+
+    def _claim_queue_task(self, queue_instance) -> dict | None:
+        """TaskQueueからタスクをclaim（取得）する
+
+        Returns:
+            タスクデータ辞書（キューが空の場合はNone）
+        """
+        if queue_instance is None:
+            return None
+        try:
+            return queue_instance.claim()
+        except Exception:
+            return None
+
     def _get_scan_task(self) -> str | None:
         """CodebaseScannerからタスクを取得する
 
@@ -362,9 +461,20 @@ class AutonomousLoopRunner:
             if result.total == 0:
                 return None
 
-            # 最も優先度の高いタスクを選択
+            # 最も優先度の高い未処理タスクを選択
             sorted_tasks = result.sorted_by_priority()
-            task = sorted_tasks[0]
+            task = None
+            for candidate in sorted_tasks:
+                # 処理済みタスクをスキップ（重複排除）
+                key = f"{candidate.file_path}:{candidate.line_number}:{candidate.title}"
+                candidate_hash = hashlib.md5(key.encode()).hexdigest()[:12]
+                if candidate_hash not in self._processed_scan_keys:
+                    task = candidate
+                    self._processed_scan_keys.add(candidate_hash)
+                    break
+
+            if task is None:
+                return None
 
             # タスクの情報をプロンプトとして構築
             prompt_parts = [
@@ -391,22 +501,3 @@ class AutonomousLoopRunner:
         except Exception:
             return None
 
-    def _get_queue_task(self) -> str | None:
-        """TaskQueueからタスクを取得する
-
-        Returns:
-            タスクコマンド（キューが空の場合はNone）
-        """
-        try:
-            from ensemble.queue import TaskQueue
-
-            queue = TaskQueue(base_dir=self.work_dir / "queue")
-            task = queue.claim()
-
-            if task is None:
-                return None
-
-            return task.get("command", None)
-
-        except Exception:
-            return None

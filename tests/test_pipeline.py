@@ -290,24 +290,35 @@ def test_create_branch(mock_run):
 # _commit_changes() のテスト (1件)
 @patch("ensemble.pipeline.subprocess.run")
 def test_commit_changes(mock_run):
-    """Test _commit_changes calls git add and git commit."""
-    mock_run.return_value = MagicMock(returncode=0)
+    """Test _commit_changes calls git diff, ls-files, git add (safe files), and git commit."""
+    mock_run.return_value = MagicMock(returncode=0, stdout="src/main.py\n")
 
     runner = PipelineRunner(task="Fix bug", workflow="simple")
     runner._commit_changes()
 
-    assert mock_run.call_count == 2
-    # First call: git add .
-    first_call_args = mock_run.call_args_list[0][0][0]
-    assert first_call_args[0] == "git"
-    assert first_call_args[1] == "add"
-    assert first_call_args[2] == "."
+    # Calls: git diff --name-only, git ls-files, git add <files>, git commit
+    assert mock_run.call_count == 4
+    # First call: git diff --name-only
+    assert mock_run.call_args_list[0][0][0][:2] == ["git", "diff"]
+    # Second call: git ls-files --others
+    assert mock_run.call_args_list[1][0][0][:2] == ["git", "ls-files"]
+    # Third call: git add <safe files>
+    assert mock_run.call_args_list[2][0][0][:2] == ["git", "add"]
+    assert "src/main.py" in mock_run.call_args_list[2][0][0]
+    # Fourth call: git commit
+    assert mock_run.call_args_list[3][0][0][:2] == ["git", "commit"]
 
-    # Second call: git commit
-    second_call_args = mock_run.call_args_list[1][0][0]
-    assert second_call_args[0] == "git"
-    assert second_call_args[1] == "commit"
-    assert second_call_args[2] == "-m"
+
+@patch("ensemble.pipeline.subprocess.run")
+def test_commit_changes_skips_sensitive_files(mock_run):
+    """Test _commit_changes skips sensitive files like .env."""
+    mock_run.return_value = MagicMock(returncode=0, stdout=".env\ncredentials.json\n")
+
+    runner = PipelineRunner(task="Fix bug", workflow="simple")
+    runner._commit_changes()
+
+    # Only git diff + ls-files (no add or commit since all files are sensitive)
+    assert mock_run.call_count == 2
 
 
 # _create_pr() のテスト (1件)

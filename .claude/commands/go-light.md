@@ -24,10 +24,18 @@ $ARGUMENTS
 - 変更対象ファイルを特定
 - 変更が軽微であることを確認（重要な変更なら `/go` を使うよう提案）
 
-### 2. 直接実行
+### 2. Dispatch経由で実行
 
-- サブエージェントでタスクを直接実行
-- 複雑な判断は不要
+- パターンAと同じ手順でDispatch経由でWorkerに委譲する:
+  1. `queue/conductor/dispatch-instruction.yaml` に指示を書く（workflow: simple, pattern: A）
+  2. Dispatchに通知:
+     ```bash
+     source .ensemble/panes.env
+     tmux send-keys -t "$DISPATCH_PANE" '新しい指示があります。queue/conductor/dispatch-instruction.yaml を確認してください'
+     tmux send-keys -t "$DISPATCH_PANE" Enter
+     ```
+  3. 完了報告を待機
+- **注意: go-lightでも自分で実装してはならない。必ずDispatch経由。**
 
 ### 3. 簡易レビュー
 

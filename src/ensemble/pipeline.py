@@ -184,12 +184,47 @@ class PipelineRunner:
             self.logger.log_event("review_error", {"error": "claude CLI not found"})
             return EXIT_ERROR
 
+    # 機密ファイルパターン（git add から除外）
+    _SENSITIVE_PATTERNS = {
+        ".env", ".env.local", ".env.production", ".env.staging",
+        "credentials.json", "credentials.yaml",
+        "secret", "token",
+    }
+    _SENSITIVE_EXTENSIONS = {".key", ".pem", ".p12", ".pfx", ".jks"}
+
+    def _is_sensitive_file(self, filepath: str) -> bool:
+        """機密ファイルかどうかを判定する"""
+        name = filepath.lower().split("/")[-1]
+        if name in self._SENSITIVE_PATTERNS:
+            return True
+        if any(p in name for p in ("secret", "credential", "token", "api_key", "apikey")):
+            return True
+        for ext in self._SENSITIVE_EXTENSIONS:
+            if name.endswith(ext):
+                return True
+        return False
+
     def _commit_changes(self) -> None:
         """変更をコミット"""
         self.logger.log_event("commit_start", {})
 
-        # git add .
-        subprocess.run(["git", "add", "."], check=True)
+        # 変更ファイル一覧を取得し、機密ファイルを除外
+        diff_result = subprocess.run(
+            ["git", "diff", "--name-only"], capture_output=True, text=True
+        )
+        untracked_result = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard"],
+            capture_output=True, text=True,
+        )
+        changed_files = [
+            f for f in (diff_result.stdout.strip() + "\n" + untracked_result.stdout.strip()).split("\n")
+            if f.strip()
+        ]
+        safe_files = [f for f in changed_files if not self._is_sensitive_file(f)]
+        if not safe_files:
+            self.logger.log_event("commit_skip", {"reason": "no safe files to commit"})
+            return
+        subprocess.run(["git", "add"] + safe_files, check=True)
 
         # git commit
         commit_message = f"{self.task}\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
