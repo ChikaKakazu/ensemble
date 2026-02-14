@@ -162,10 +162,14 @@ tmux attach -t ensemble-workers
 ## Requirements
 
 - Python 3.11+
-- Claude Code CLI (`claude` command available)
-- tmux
-- git 2.20+ (for worktree support)
+- **Claude Code CLI** (`claude` command available) - [Install](https://claude.ai/code)
+- **tmux** - `apt install tmux` (Ubuntu) / `brew install tmux` (macOS)
+- **git** 2.20+ (for worktree support)
 - Claude Max plan recommended (for parallel execution)
+- **Optional**: `gh` CLI for GitHub Issue integration
+- **Optional**: `inotifywait` for event-driven notifications (`apt install inotify-tools`)
+
+> **Note**: Ensemble requires Linux or macOS. On Windows, use WSL.
 
 ## Agent Architecture
 

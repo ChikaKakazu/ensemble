@@ -153,6 +153,16 @@ logs/
 .ensemble/status/
 .ensemble/logs/
 .ensemble/inbox_watcher.pid
+
+# Secrets (added by Ensemble for safe autonomous commits)
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+credentials.json
+credentials.yaml
 """
 
     if gitignore.exists():
