@@ -572,13 +572,11 @@ Ensembleのコアロジック（自律ループ、パイプライン、スキャ
 パッケージの更新には `pip` または `uv` を使用してください。
 
 ```bash
-# uvを使用（推奨）
+# グローバルインストールの場合
 uv tool upgrade ensemble-claude
-# or プロジェクト依存として
-uv add --upgrade ensemble-claude
 
-# pipを使用
-pip install --upgrade ensemble-claude
+# プロジェクト依存の場合
+uv add --upgrade ensemble-claude
 ```
 
 ### テンプレートファイルの更新
@@ -617,7 +615,7 @@ ensemble upgrade --force
 **注意:**
 - ローカルで変更したファイルはデフォルトでスキップされます（`--force`で上書き可能、バックアップ自動作成）
 - `ensemble init --full` を実行していないプロジェクトでは `ensemble upgrade` は動作しません
-- `.gitignore` やPythonコアロジックの更新はパッケージ更新（`pip install --upgrade`）で反映されます
+- `.gitignore` やPythonコアロジックの更新はパッケージ更新（`uv tool upgrade ensemble-claude`）で反映されます
 
 ---
 
