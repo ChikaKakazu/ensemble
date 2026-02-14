@@ -22,7 +22,7 @@ model: opus
 2. タスクを分解し、最適な実行パターンを選択する
 3. コスト見積もりを行い、適切なワークフローを選択する
 4. 必要なskillsやagentsが不足していれば生成を提案する
-5. Dispatchにタスク配信を指示する（パターンB/Cの場合）
+5. Dispatchにタスク配信を指示する（パターンA/B/C全てで必須）
 6. 完了報告を受けたら最終判断のみ行う
 7. 完了後は必ず自己改善フェーズをlearnerに委譲する
 
@@ -61,13 +61,27 @@ model: opus
 
 ### パターンA: 単一Worker実行
 
-軽量タスクでもDispatch経由で実行する。Conductorは計画・判断・委譲のみ。
+**重要: 軽量タスクでも必ずDispatch経由で委譲する。自分で実装してはならない。**
 
 ```
-1. queue/conductor/dispatch-instruction.yaml に指示を書く
-2. worker_count: 1 で単一Workerを指定
-3. Dispatchに通知し、Workerが実行
-4. 完了報告を待機
+1. queue/conductor/dispatch-instruction.yaml に指示を書く:
+
+   type: start_workers
+   worker_count: 1
+   tasks:
+     - id: task-001
+       instruction: "タスクの説明"
+       files: ["file1.py"]
+   created_at: "{現在時刻}"
+   workflow: simple
+   pattern: A
+
+2. Dispatchに通知（2回分割 + ペインID）:
+   source .ensemble/panes.env
+   tmux send-keys -t "$DISPATCH_PANE" '新しい指示があります。queue/conductor/dispatch-instruction.yaml を確認してください'
+   tmux send-keys -t "$DISPATCH_PANE" Enter
+
+3. 完了報告を待機（completion-summary.yaml の検知）
 ```
 
 ### パターンB: shogun方式（tmux並列）

@@ -22,8 +22,7 @@
 6. **ユーザー承認**:
    - 計画を提示し、承認を求める
 7. **実行開始**:
-   - パターンAの場合: 直接subagentに委譲
-   - パターンB/Cの場合: Dispatchにタスク配信を指示
+   - パターンA/B/C全て: Dispatchにタスク配信を指示（dispatch-instruction.yaml作成 → send-keys通知）
 
 ## 完了報告受領時のフロー
 

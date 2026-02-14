@@ -69,13 +69,35 @@ scan結果から最優先タスクを選択するか、`ensemble investigate` �
 3. パターンに応じて実行:
 
    **パターンA（単一Worker）**:
-   - Dispatch経由でWorker1つで実行
-   - Conductorは計画・判断・委譲のみ
-   - 軽量タスクでも設計思想を遵守
+   **重要: 軽量タスクでも必ずDispatch経由で委譲する。自分で実装してはならない。**
+   1. `queue/conductor/dispatch-instruction.yaml` に指示を書く:
+      ```yaml
+      type: start_workers
+      worker_count: 1
+      tasks:
+        - id: task-001
+          instruction: "タスクの説明"
+          files: ["file1.py"]
+      created_at: "{現在時刻}"
+      workflow: simple
+      pattern: A
+      ```
+   2. Dispatchに通知（2回分割 + ペインID）:
+      ```bash
+      source .ensemble/panes.env
+      tmux send-keys -t "$DISPATCH_PANE" '新しい指示があります。queue/conductor/dispatch-instruction.yaml を確認してください'
+      tmux send-keys -t "$DISPATCH_PANE" Enter
+      ```
+   3. 完了報告を待機（completion-summary.yaml の検知）
 
    **パターンB（shogun方式）**:
    1. `queue/conductor/dispatch-instruction.yaml` に指示を書く
-   2. `tmux send-keys -t ensemble:main.1 "新しい指示があります"` でDispatchに通知
+   2. Dispatchに通知（2回分割 + ペインID）:
+      ```bash
+      source .ensemble/panes.env
+      tmux send-keys -t "$DISPATCH_PANE" '新しい指示があります。queue/conductor/dispatch-instruction.yaml を確認してください'
+      tmux send-keys -t "$DISPATCH_PANE" Enter
+      ```
    3. Dispatchがpane-setup.shでワーカーペインを起動
    4. 各ワーカーにタスクYAMLを配信
    5. 完了報告を待機
