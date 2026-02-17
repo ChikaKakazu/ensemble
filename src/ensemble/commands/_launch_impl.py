@@ -106,6 +106,13 @@ def run_launch(session: Optional[str] = None, attach: bool = True) -> None:
     # Save pane IDs
     _save_pane_ids(session, ensemble_dir)
 
+    # Agent Teams mode detection
+    agent_teams_mode = os.environ.get("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", "0")
+    if agent_teams_mode == "1":
+        click.echo("  Agent Teams Mode: available (for research/review tasks)")
+    else:
+        click.echo("  Agent Teams Mode: disabled (set CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 to enable)")
+
     # Start inbox_watcher
     try:
         inbox_watcher = InboxWatcher(project_root)
@@ -303,9 +310,12 @@ def _create_sessions(session: str, project_root: Path, agents: dict[str, Path]) 
     subprocess.run(["tmux", "select-pane", "-t", f"{conductor_session}:main.2", "-T", "mode-viz"], check=True)
 
     # Start mode visualizer in mode-viz pane
-    mode_path = project_root / ".ensemble" / "status" / "mode.md"
+    # Resolve mode-viz.sh path: .claude/scripts/ first, then scripts/
+    mode_viz_script = project_root / ".claude" / "scripts" / "mode-viz.sh"
+    if not mode_viz_script.exists():
+        mode_viz_script = project_root / "scripts" / "mode-viz.sh"
     subprocess.run(
-        ["tmux", "send-keys", "-t", f"{conductor_session}:main.2", f"watch -n 3 -t cat {mode_path}"],
+        ["tmux", "send-keys", "-t", f"{conductor_session}:main.2", f"bash {mode_viz_script}"],
         check=True,
     )
     time.sleep(1)

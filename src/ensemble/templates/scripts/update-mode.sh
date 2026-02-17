@@ -2,10 +2,18 @@
 # scripts/update-mode.sh
 # Ensembleの実行モード（A/B/C/T/IDLE）を視覚化するASCIIアートを生成
 #
-# Usage: .claude/scripts/update-mode.sh <mode> <status> [options]
+# Usage: ./scripts/update-mode.sh <mode> <status> [options]
 # mode: idle|A|B|C|T
-# status: active|completed|error
-# options: --workers N --workflow NAME --tasks-total N --tasks-done N --worktrees N --teammates N
+# status: active|completed|error|waiting
+# options:
+#   --workers N           ワーカー数
+#   --workflow NAME       ワークフロー名
+#   --tasks-total N       タスク総数
+#   --tasks-done N        完了タスク数
+#   --worktrees N         worktree数
+#   --teammates N         teammate数
+#   --worker-states STR   ワーカー状態（カンマ区切り: "busy,idle,done"）
+#   --frame N             アニメーションフレーム（0 or 1）
 
 set -euo pipefail
 
@@ -13,331 +21,343 @@ MODE="${1:-idle}"
 STATUS="${2:-active}"
 shift 2
 
-# オプション引数の解析
-WORKERS=0
+# オプション引数
+WORKERS=1
 WORKFLOW=""
 TASKS_TOTAL=0
 TASKS_DONE=0
-WORKTREES=0
-TEAMMATES=0
+WORKTREES=3
+TEAMMATES=3
+WORKER_STATES=""
+FRAME=0
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --workers)
-            WORKERS="$2"
-            shift 2
-            ;;
-        --workflow)
-            WORKFLOW="$2"
-            shift 2
-            ;;
-        --tasks-total)
-            TASKS_TOTAL="$2"
-            shift 2
-            ;;
-        --tasks-done)
-            TASKS_DONE="$2"
-            shift 2
-            ;;
-        --worktrees)
-            WORKTREES="$2"
-            shift 2
-            ;;
-        --teammates)
-            TEAMMATES="$2"
-            shift 2
-            ;;
-        *)
-            echo "Unknown option: $1"
-            shift
-            ;;
+        --workers)       WORKERS="$2";       shift 2 ;;
+        --workflow)      WORKFLOW="$2";      shift 2 ;;
+        --tasks-total)   TASKS_TOTAL="$2";   shift 2 ;;
+        --tasks-done)    TASKS_DONE="$2";    shift 2 ;;
+        --worktrees)     WORKTREES="$2";     shift 2 ;;
+        --teammates)     TEAMMATES="$2";     shift 2 ;;
+        --worker-states) WORKER_STATES="$2"; shift 2 ;;
+        --frame)         FRAME="$2";         shift 2 ;;
+        *) echo "Unknown option: $1"; shift ;;
     esac
 done
 
-# 出力先
 OUTPUT_FILE=".ensemble/status/mode.md"
+PARAMS_FILE=".ensemble/status/mode-params.env"
+mkdir -p "$(dirname "$OUTPUT_FILE")"
 
-# ステータス記号
+# ステータス記号とグローバルワーカー状態
 case $STATUS in
-    active)
-        STATUS_SYMBOL="● ACTIVE"
-        WORKER_STATUS="● busy"
-        ;;
-    completed)
-        STATUS_SYMBOL="✓ DONE"
-        WORKER_STATUS="✓ done"
-        ;;
-    error)
-        STATUS_SYMBOL="✗ ERROR"
-        WORKER_STATUS="✗ fail"
-        ;;
-    *)
-        STATUS_SYMBOL="○ Waiting"
-        WORKER_STATUS="○ idle"
-        ;;
+    active)    STATUS_SYMBOL="● ACTIVE";  WORKER_STATUS="busy" ;;
+    completed) STATUS_SYMBOL="✓ DONE";    WORKER_STATUS="done" ;;
+    error)     STATUS_SYMBOL="✗ ERROR";   WORKER_STATUS="fail" ;;
+    *)         STATUS_SYMBOL="○ Waiting"; WORKER_STATUS="idle" ;;
 esac
 
-# モード別ASCIIアート生成関数
-generate_idle() {
-    cat << 'EOF'
-╔══════════════════════════════════════╗
-║  💤 EXECUTION MODE                   ║
-╠══════════════════════════════════════╣
-║                                      ║
-║  Mode: IDLE                          ║
-║  Status: ○ Waiting                   ║
-║                                      ║
-║  ┌──────────┐                        ║
-║  │Conductor │  No active tasks       ║
-║  │  (opus)  │                        ║
-║  └──────────┘                        ║
-║                                      ║
-╚══════════════════════════════════════╝
-EOF
+# アニメーションフレーム用矢印
+if [ "${FRAME}" = "1" ]; then
+    ARROW_S="══>"
+    ARROW_L="════════>"
+    ARROW_FORK="═══┬═══>"
+    ARROW_F="═══>"
+else
+    ARROW_S="──→"
+    ARROW_L="────────→"
+    ARROW_FORK="───┬───→"
+    ARROW_F="───>"
+fi
+
+# ワーカー状態記号取得（1-indexed）
+get_worker_state() {
+    local idx=$1
+    local state=""
+    if [ -n "$WORKER_STATES" ]; then
+        state=$(echo "$WORKER_STATES" | tr ',' '\n' | sed -n "${idx}p")
+        [ -z "$state" ] && state=$(echo "$WORKER_STATES" | tr ',' '\n' | head -1)
+    fi
+    [ -z "$state" ] && state="$WORKER_STATUS"
+    case "$state" in
+        busy) echo "● busy" ;;
+        idle) echo "○ idle" ;;
+        done) echo "✓ done" ;;
+        fail) echo "✗ fail" ;;
+        *)    echo "○ idle" ;;
+    esac
 }
 
-generate_mode_a() {
-    cat << EOF
-╔══════════════════════════════════════╗
-║  ⚡ EXECUTION MODE                   ║
-╠══════════════════════════════════════╣
-║                                      ║
-║  Mode: A - Direct (subagent)         ║
-║  Status: $STATUS_SYMBOL                    ║
-║  Workflow: ${WORKFLOW:-simple}                    ║
-║                                      ║
-║  ┌──────────┐    ┌────────┐          ║
-║  │Conductor │ →  │Dispatch│          ║
-║  │  (opus)  │    │(sonnet)│          ║
-║  └──────────┘    └───┬────┘          ║
-║                      │               ║
-║                      ▼               ║
-║                 ┌────────┐           ║
-║                 │Worker-1│           ║
-║                 │$WORKER_STATUS│           ║
-║                 └────────┘           ║
-║                                      ║
-║  Tasks: $TASKS_DONE/$TASKS_TOTAL in progress              ║
-╚══════════════════════════════════════╝
-EOF
-}
-
-generate_mode_b() {
-    local worker_boxes=""
-    if [ "$WORKERS" -le 2 ]; then
-        # 2ワーカーまで: 横並び
-        worker_boxes=$(cat << EOF
-║                  ┌───┴───┐           ║
-║                  ▼       ▼           ║
-║            ┌────────┐┌────────┐      ║
-║            │Worker-1││Worker-2│      ║
-║            │$WORKER_STATUS││$WORKER_STATUS│      ║
-║            └────────┘└────────┘      ║
-EOF
-)
+# Tasks行生成
+get_tasks_line() {
+    if [ "$TASKS_TOTAL" -eq 0 ]; then
+        case "$STATUS" in
+            active)    echo "Tasks: running" ;;
+            completed) echo "Tasks: all done" ;;
+            *)         echo "Tasks: pending" ;;
+        esac
+    elif [ "$TASKS_DONE" -ge "$TASKS_TOTAL" ]; then
+        echo "Tasks: $TASKS_DONE/$TASKS_TOTAL completed"
     else
-        # 3-4ワーカー: 縦並び
-        worker_boxes=$(cat << EOF
-║                  ┌───┴───┐           ║
-║                  ▼       ▼           ║
-║            ┌────────┐┌────────┐      ║
-║            │Worker-1││Worker-2│      ║
-║            │$WORKER_STATUS││$WORKER_STATUS│      ║
-║            └────────┘└────────┘      ║
-EOF
-)
-        if [ "$WORKERS" -eq 3 ]; then
-            # workers=3: Worker-3のみ表示
-            worker_boxes+=$(cat << EOF
+        echo "Tasks: $TASKS_DONE/$TASKS_TOTAL in progress"
+    fi
+}
 
-║            ┌────────┐              ║
-║            │Worker-3│              ║
-║            │$WORKER_STATUS│              ║
-║            └────────┘              ║
-EOF
-)
-        fi
-        if [ "$WORKERS" -ge 4 ]; then
-            # workers=4以上: Worker-3とWorker-4を表示
-            worker_boxes+=$(cat << EOF
+# ボックスライン生成（65幅: ║ + 63chars + ║）
+# wc -m でマルチバイト文字を正しくカウント
+INNER_W=63
+box_line() {
+    local content="${1:-}"
+    local char_count
+    char_count=$(printf '%s' "$content" | wc -m)
+    local padding=$((INNER_W - char_count))
+    [ $padding -lt 0 ] && padding=0
+    printf '║%s%*s║\n' "$content" "$padding" ""
+}
 
-║            ┌────────┐┌────────┐      ║
-║            │Worker-3││Worker-4│      ║
-║            │$WORKER_STATUS││$WORKER_STATUS│      ║
-║            └────────┘└────────┘      ║
-EOF
-)
-        fi
+BORDER_TOP="╔═══════════════════════════════════════════════════════════════╗"
+BORDER_SEP="╠═══════════════════════════════════════════════════════════════╣"
+BORDER_BOT="╚═══════════════════════════════════════════════════════════════╝"
+
+# IDLE モード
+generate_idle() {
+    printf '%s\n' "$BORDER_TOP"
+    box_line "  💤 EXECUTION MODE"
+    printf '%s\n' "$BORDER_SEP"
+    box_line ""
+    box_line "  Mode: IDLE"
+    box_line "  Status: ○ Waiting"
+    box_line ""
+    box_line "              ┌──────────┐"
+    box_line "              │Conductor │  No active tasks"
+    box_line "              │  (opus)  │"
+    box_line "              └──────────┘"
+    box_line ""
+    printf '%s\n' "$BORDER_BOT"
+}
+
+# モードA: Conductor → Dispatch → Worker-1 横一列
+generate_mode_a() {
+    local w1
+    w1=$(get_worker_state 1)
+    local tasks_line
+    tasks_line=$(get_tasks_line)
+    local wf="${WORKFLOW:-simple}"
+
+    printf '%s\n' "$BORDER_TOP"
+    box_line "  ⚡ EXECUTION MODE"
+    printf '%s\n' "$BORDER_SEP"
+    box_line ""
+    box_line "  Mode: A - Direct (subagent)"
+    box_line "  Status: $STATUS_SYMBOL"
+    box_line "  Workflow: $wf"
+    box_line ""
+    box_line "  ┌──────────┐     ┌────────┐           ┌──────────┐"
+    box_line "  │Conductor │ $ARROW_S │Dispatch│ $ARROW_L │ Worker-1 │"
+    box_line "  │  (opus)  │     │(sonnet)│           │ $w1   │"
+    box_line "  └──────────┘     └────────┘           └──────────┘"
+    box_line ""
+    box_line "  $tasks_line"
+    printf '%s\n' "$BORDER_BOT"
+}
+
+# モードB: Conductor → Dispatch → Worker-1..N (横展開)
+generate_mode_b() {
+    local num_workers="${WORKERS:-2}"
+    local tasks_line
+    tasks_line=$(get_tasks_line)
+    local wf="${WORKFLOW:-default}"
+    local w1
+    w1=$(get_worker_state 1)
+
+    printf '%s\n' "$BORDER_TOP"
+    box_line "  ⚡ EXECUTION MODE"
+    printf '%s\n' "$BORDER_SEP"
+    box_line ""
+    box_line "  Mode: B - Parallel (tmux)"
+    box_line "  Status: $STATUS_SYMBOL"
+    box_line "  Workflow: $wf"
+    box_line ""
+
+    if [ "$num_workers" -le 1 ]; then
+        # 1ワーカー: Pattern A同様の横一列
+        box_line "  ┌──────────┐     ┌────────┐           ┌──────────┐"
+        box_line "  │Conductor │ $ARROW_S │Dispatch│ $ARROW_L │ Worker-1 │"
+        box_line "  │  (opus)  │     │(sonnet)│           │ $w1   │"
+        box_line "  └──────────┘     └────────┘           └──────────┘"
+    else
+        # 2+ワーカー: Dispatchから分岐（横展開 + 縦並び）
+        box_line "  ┌──────────┐     ┌────────┐          ┌──────────┐"
+        box_line "  │Conductor │ $ARROW_S │Dispatch│ $ARROW_FORK │ Worker-1 │"
+        box_line "  │  (opus)  │     │(sonnet)│    │     │ $w1   │"
+        box_line "  └──────────┘     └────────┘    │     └──────────┘"
+
+        # 追加ワーカーを縦に並べる（DispatchのY軸延長から分岐）
+        # ┬は位置33（0-indexed）: "  │Conductor │ ──→ │Dispatch│ " = 33文字
+        local PRE33="                                 "   # 33スペース
+        local PRE39="                                       "  # 39スペース
+        local i
+        for i in $(seq 2 "$num_workers"); do
+            local wi
+            wi=$(get_worker_state "$i")
+            if [ "$i" -lt "$num_workers" ]; then
+                # 中間ワーカー: ├───→
+                box_line "${PRE33}│     ┌──────────┐"
+                box_line "${PRE33}├$ARROW_F │ Worker-$i │"
+                box_line "${PRE33}│     │ $wi   │"
+                box_line "${PRE33}│     └──────────┘"
+            else
+                # 最後のワーカー: └───→
+                box_line "${PRE33}│     ┌──────────┐"
+                box_line "${PRE33}└$ARROW_F │ Worker-$i │"
+                box_line "${PRE39}│ $wi   │"
+                box_line "${PRE39}└──────────┘"
+            fi
+        done
     fi
 
-    cat << EOF
-╔══════════════════════════════════════╗
-║  ⚡ EXECUTION MODE                   ║
-╠══════════════════════════════════════╣
-║                                      ║
-║  Mode: B - Parallel (tmux)           ║
-║  Status: $STATUS_SYMBOL                    ║
-║  Workflow: ${WORKFLOW:-default}                   ║
-║                                      ║
-║  ┌──────────┐    ┌────────┐          ║
-║  │Conductor │ →  │Dispatch│          ║
-║  │  (opus)  │    │(sonnet)│          ║
-║  └──────────┘    └───┬────┘          ║
-$worker_boxes
-║                                      ║
-║  Tasks: $TASKS_DONE/$TASKS_TOTAL completed                ║
-╚══════════════════════════════════════╝
-EOF
+    box_line ""
+    box_line "  $tasks_line"
+    printf '%s\n' "$BORDER_BOT"
 }
 
+# モードC: Conductor → Dispatch → worktrees (横展開)
 generate_mode_c() {
     local worktree_count="${WORKTREES:-3}"
-    local worktree_boxes=""
+    local tasks_line
+    tasks_line=$(get_tasks_line)
+    local wf="${WORKFLOW:-heavy}"
+    local wt_status
+    wt_status=$(get_worker_state 1)
+
+    printf '%s\n' "$BORDER_TOP"
+    box_line "  ⚡ EXECUTION MODE"
+    printf '%s\n' "$BORDER_SEP"
+    box_line ""
+    box_line "  Mode: C - Isolated (worktree)"
+    box_line "  Status: $STATUS_SYMBOL"
+    box_line "  Workflow: $wf"
+    box_line ""
+    box_line "  ┌──────────┐     ┌────────┐"
+    box_line "  │Conductor │ $ARROW_S │Dispatch│"
+    box_line "  │  (opus)  │     │(sonnet)│"
+    box_line "  └──────────┘     └───┬────┘"
+    box_line ""
 
     if [ "$worktree_count" -eq 2 ]; then
-        worktree_boxes=$(cat << EOF
-║          ┌───────────┴───────────┐   ║
-║          ▼                       ▼   ║
-║    ┌──────────┐          ┌──────────┐║
-║    │ worktree │          │ worktree │║
-║    │  feat-1  │          │  feat-2  │║
-║    │$WORKER_STATUS Worker │          │$WORKER_STATUS Worker │║
-║    └──────────┘          └──────────┘║
-EOF
-)
+        box_line "          ┌──────────┴──────────┐"
+        box_line "          ▼                     ▼"
+        box_line "    ┌──────────┐         ┌──────────┐"
+        box_line "    │ worktree │         │ worktree │"
+        box_line "    │  feat-1  │         │  feat-2  │"
+        box_line "    │$wt_status Worker │         │$wt_status Worker │"
+        box_line "    └──────────┘         └──────────┘"
     elif [ "$worktree_count" -eq 3 ]; then
-        worktree_boxes=$(cat << EOF
-║          ┌───────────┼───────────┐   ║
-║          ▼           ▼           ▼   ║
-║    ┌──────────┐┌──────────┐┌──────────┐
-║    │ worktree ││ worktree ││ worktree │║
-║    │  feat-1  ││  feat-2  ││  feat-3  │║
-║    │$WORKER_STATUS Worker ││$WORKER_STATUS Worker ││$WORKER_STATUS Worker │║
-║    └──────────┘└──────────┘└──────────┘║
-EOF
-)
+        box_line "       ┌──────────┼──────────┐"
+        box_line "       ▼          ▼          ▼"
+        box_line "  ┌──────────┐┌──────────┐┌──────────┐"
+        box_line "  │ worktree ││ worktree ││ worktree │"
+        box_line "  │  feat-1  ││  feat-2  ││  feat-3  │"
+        box_line "  │$wt_status││$wt_status││$wt_status│"
+        box_line "  └──────────┘└──────────┘└──────────┘"
     else
-        # 4+の場合は省略表示
-        worktree_boxes=$(cat << EOF
-║          ┌───────────┼───────────┐   ║
-║          ▼           ▼           ▼   ║
-║    ┌──────────┐┌──────────┐┌──────────┐
-║    │ worktree ││ worktree ││   ...    │║
-║    │  feat-1  ││  feat-2  ││  ($worktree_count total)││
-║    │$WORKER_STATUS Worker ││$WORKER_STATUS Worker ││          │║
-║    └──────────┘└──────────┘└──────────┘║
-EOF
-)
+        box_line "       ┌──────────┼──────────┐"
+        box_line "       ▼          ▼          ▼"
+        box_line "  ┌──────────┐┌──────────┐┌──────────┐"
+        box_line "  │ worktree ││ worktree ││   ...    │"
+        box_line "  │  feat-1  ││  feat-2  ││($worktree_count total)│"
+        box_line "  │$wt_status││$wt_status││          │"
+        box_line "  └──────────┘└──────────┘└──────────┘"
     fi
 
-    cat << EOF
-╔══════════════════════════════════════╗
-║  ⚡ EXECUTION MODE                   ║
-╠══════════════════════════════════════╣
-║                                      ║
-║  Mode: C - Isolated (worktree)       ║
-║  Status: $STATUS_SYMBOL                    ║
-║  Workflow: ${WORKFLOW:-heavy}                     ║
-║                                      ║
-║  ┌──────────┐    ┌────────┐          ║
-║  │Conductor │ →  │Dispatch│          ║
-║  │  (opus)  │    │(sonnet)│          ║
-║  └──────────┘    └───┬────┘          ║
-║                      │               ║
-$worktree_boxes
-║                                      ║
-║  Tasks: $TASKS_DONE/$TASKS_TOTAL completed                ║
-╚══════════════════════════════════════╝
-EOF
+    box_line ""
+    box_line "  $tasks_line"
+    printf '%s\n' "$BORDER_BOT"
 }
 
+# モードT: Conductor (Team Lead) → Teammates (横展開)
 generate_mode_t() {
     local teammate_count="${TEAMMATES:-3}"
-    local teammate_boxes=""
+    local tm_status
+    tm_status=$(get_worker_state 1)
+
+    printf '%s\n' "$BORDER_TOP"
+    box_line "  🔬 EXECUTION MODE"
+    printf '%s\n' "$BORDER_SEP"
+    box_line ""
+    box_line "  Mode: T - Research (Agent Teams)"
+    box_line "  Status: $STATUS_SYMBOL"
+    box_line ""
+    box_line "            ┌──────────────┐"
+    box_line "            │  Conductor   │"
+    box_line "            │ (Team Lead)  │"
+    box_line "            └──────┬───────┘"
+    box_line ""
 
     if [ "$teammate_count" -eq 2 ]; then
-        teammate_boxes=$(cat << EOF
-║         ┌─────┴─────┐               ║
-║         ▼           ▼               ║
-║    ┌────────┐  ┌────────┐           ║
-║    │Mate #1 │  │Mate #2 │           ║
-║    │security│  │  perf  │           ║
-║    │$WORKER_STATUS│  │$WORKER_STATUS│           ║
-║    └────────┘  └────────┘           ║
-║        ↕           ↕                ║
-║    [ mailbox: discussion active ]    ║
-EOF
-)
+        box_line "         ┌─────┴─────┐"
+        box_line "         ▼           ▼"
+        box_line "    ┌────────┐  ┌────────┐"
+        box_line "    │Mate #1 │  │Mate #2 │"
+        box_line "    │security│  │  perf  │"
+        box_line "    │$tm_status│  │$tm_status│"
+        box_line "    └────────┘  └────────┘"
+        box_line "        ↕           ↕"
+        box_line "    [ mailbox: discussion active ]"
     elif [ "$teammate_count" -eq 3 ]; then
-        teammate_boxes=$(cat << EOF
-║         ┌─────┼─────┐               ║
-║         ▼     ▼     ▼               ║
-║    ┌────────┐┌────────┐┌────────┐   ║
-║    │Mate #1 ││Mate #2 ││Mate #3 │   ║
-║    │security││  perf  ││  test  │   ║
-║    │$WORKER_STATUS││$WORKER_STATUS││$WORKER_STATUS│   ║
-║    └────────┘└────────┘└────────┘   ║
-║        ↕         ↕         ↕        ║
-║    [ mailbox: discussion active ]    ║
-EOF
-)
+        box_line "         ┌─────┼─────┐"
+        box_line "         ▼     ▼     ▼"
+        box_line "    ┌────────┐┌────────┐┌────────┐"
+        box_line "    │Mate #1 ││Mate #2 ││Mate #3 │"
+        box_line "    │security││  perf  ││  test  │"
+        box_line "    │$tm_status││$tm_status││$tm_status│"
+        box_line "    └────────┘└────────┘└────────┘"
+        box_line "        ↕         ↕         ↕"
+        box_line "    [ mailbox: discussion active ]"
     else
-        # 4+の場合
-        teammate_boxes=$(cat << EOF
-║         ┌─────┼─────┼─────┐         ║
-║         ▼     ▼     ▼     ▼         ║
-║    ┌────────┐┌────────┐┌────────┐   ║
-║    │Mate #1 ││Mate #2 ││  ...   │   ║
-║    │security││  perf  ││($teammate_count total) │   ║
-║    │$WORKER_STATUS││$WORKER_STATUS││$WORKER_STATUS│   ║
-║    └────────┘└────────┘└────────┘   ║
-║        ↕         ↕         ↕        ║
-║    [ mailbox: discussion active ]    ║
-EOF
-)
+        box_line "         ┌─────┼─────┼─────┐"
+        box_line "         ▼     ▼     ▼     ▼"
+        box_line "    ┌────────┐┌────────┐┌────────┐"
+        box_line "    │Mate #1 ││Mate #2 ││  ...   │"
+        box_line "    │security││  perf  ││($teammate_count total)│"
+        box_line "    │$tm_status││$tm_status││$tm_status│"
+        box_line "    └────────┘└────────┘└────────┘"
+        box_line "        ↕         ↕         ↕"
+        box_line "    [ mailbox: discussion active ]"
     fi
 
-    cat << EOF
-╔══════════════════════════════════════╗
-║  🔬 EXECUTION MODE                   ║
-╠══════════════════════════════════════╣
-║                                      ║
-║  Mode: T - Research (Agent Teams)    ║
-║  Status: $STATUS_SYMBOL                    ║
-║                                      ║
-║        ┌──────────────┐              ║
-║        │  Conductor   │              ║
-║        │ (Team Lead)  │              ║
-║        └──────┬───────┘              ║
-$teammate_boxes
-║                                      ║
-║  Teammates: $teammate_count active                 ║
-╚══════════════════════════════════════╝
-EOF
+    box_line ""
+    box_line "  Teammates: $teammate_count active"
+    printf '%s\n' "$BORDER_BOT"
 }
 
-# モード別に生成
-case $MODE in
-    idle)
-        generate_idle > "$OUTPUT_FILE"
-        ;;
-    A)
-        generate_mode_a > "$OUTPUT_FILE"
-        ;;
-    B)
-        generate_mode_b > "$OUTPUT_FILE"
-        ;;
-    C)
-        generate_mode_c > "$OUTPUT_FILE"
-        ;;
-    T)
-        generate_mode_t > "$OUTPUT_FILE"
-        ;;
-    *)
-        echo "Error: Unknown mode: $MODE"
-        echo "Valid modes: idle, A, B, C, T"
-        exit 1
-        ;;
-esac
+# モード別に生成してOUTPUT_FILEに書き込む
+{
+    case $MODE in
+        idle) generate_idle ;;
+        A)    generate_mode_a ;;
+        B)    generate_mode_b ;;
+        C)    generate_mode_c ;;
+        T)    generate_mode_t ;;
+        *)
+            echo "Error: Unknown mode: $MODE"
+            echo "Valid modes: idle, A, B, C, T"
+            exit 1
+            ;;
+    esac
+} > "$OUTPUT_FILE"
+
+# モードパラメータを保存（mode-viz.shが参照する）
+mkdir -p "$(dirname "$PARAMS_FILE")"
+cat > "$PARAMS_FILE" << EOF
+MODE=$MODE
+STATUS=$STATUS
+WORKERS=${WORKERS:-1}
+WORKFLOW=${WORKFLOW:-}
+TASKS_TOTAL=$TASKS_TOTAL
+TASKS_DONE=$TASKS_DONE
+WORKER_STATES=${WORKER_STATES:-}
+FRAME=$FRAME
+EOF
 
 echo "Mode display updated: $OUTPUT_FILE (mode=$MODE, status=$STATUS)"

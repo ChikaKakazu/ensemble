@@ -146,16 +146,23 @@ ConductorがTeam Leadとして直接操作。Dispatch/queue不要。
 2. Delegate Modeを有効化（推奨）:
    Conductorを調整専用にする
 
-3. タスクをmessage/broadcastで分配:
+3. EXECUTION MODE表示を更新（Conductorが直接実行）:
+   bash .claude/scripts/update-mode.sh T active --teammates 3
+   ※ パターンTではDispatchを使用しないため、Conductorが直接更新する
+
+4. タスクをmessage/broadcastで分配:
    各teammateに調査・レビュータスクを割り当て
 
-4. 完了検知:
+5. 完了検知:
    TeammateIdleフック + 共有タスクリストで自動検知
 
-5. チーム削除:
+6. チーム削除:
    「Clean up the team」
 
-6. 結果を統合して計画/レビュー報告に反映
+7. EXECUTION MODE表示をIDLEに戻す:
+   bash .claude/scripts/update-mode.sh idle waiting
+
+8. 結果を統合して計画/レビュー報告に反映
 ```
 
 **重要**: Agent Teamsは「調査・レビュー」専用。コード実装にはパターンA/B/Cを使用。

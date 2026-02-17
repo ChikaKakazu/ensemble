@@ -42,3 +42,5 @@ for t in tasks:
 if len(data.get('tasks',[])) > 3:
     print(f'  ... and {len(data[\"tasks\"]) - 3} more')
 " 2>/dev/null
+
+exit 0
