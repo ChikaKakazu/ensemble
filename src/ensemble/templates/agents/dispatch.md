@@ -431,6 +431,88 @@ updater.set_agent_status("worker-1", "busy", task="Building src/main.py")
 updater.add_log_entry("Task task-123 dispatched to worker-1")
 ```
 
+## モード表示の更新
+
+ワーカー状態変化時に `.ensemble/status/mode-params.env` を更新し、mode-viz.shのリアルタイム表示に反映させる。
+
+**スクリプトパスの解決順序**: `.claude/scripts/update-mode.sh` → `scripts/update-mode.sh`（フォールバック）
+
+```bash
+UPDATE_SCRIPT=".claude/scripts/update-mode.sh"
+[ ! -f "$UPDATE_SCRIPT" ] && UPDATE_SCRIPT="scripts/update-mode.sh"
+```
+
+### 更新タイミングと具体的なコマンド
+
+#### a) ワーカー起動時（pane-setup.sh実行後）
+
+```bash
+bash $UPDATE_SCRIPT A active --workers 1 --workflow simple --tasks-total 1 --tasks-done 0 --worker-states "busy"
+```
+
+複数ワーカーの場合（`--worker-states` はカンマ区切り）:
+```bash
+bash $UPDATE_SCRIPT B active --workers 2 --workflow default --tasks-total 2 --tasks-done 0 --worker-states "busy,busy"
+```
+
+**注意**: pane-setup.shが起動時にA/Bモードを自動設定するため、Dispatchからの(a)呼び出しは
+tasks-totalやworkflowなどpane-setup.shが設定しない詳細パラメータを補完する目的で行う。
+pane-setup.shの自動設定で十分な場合は省略可。
+
+#### b) タスク完了報告受信時
+
+Worker完了報告を受け取った時:
+```bash
+bash $UPDATE_SCRIPT A completed --workers 1 --workflow simple --tasks-total 1 --tasks-done 1 --worker-states "done"
+```
+
+#### b-2) 部分完了時（複数ワーカー）
+
+パターンBで複数ワーカーの場合、各Worker完了報告受信のたびにtasks-doneとworker-statesを更新する。
+例: Worker-1が完了しWorker-2が作業中の場合:
+```bash
+bash $UPDATE_SCRIPT B active --workers 2 --workflow default --tasks-total 2 --tasks-done 1 --worker-states "done,busy"
+```
+
+#### c) 全タスク完了時（completion-summary作成後）
+
+IDLEに戻す:
+```bash
+bash $UPDATE_SCRIPT idle waiting
+```
+
+#### d) エラー発生時
+
+```bash
+bash $UPDATE_SCRIPT A error --workers 1 --worker-states "fail"
+```
+
+リトライ実行時はactiveに戻す:
+```bash
+bash $UPDATE_SCRIPT B active --workers 2 --worker-states "done,busy"
+```
+
+#### e) エスカレーション発生時
+
+3段階エスカレーションのPhase 3失敗後、Conductorへのエスカレーション報告と同時にモードをerrorに更新する:
+```bash
+bash $UPDATE_SCRIPT B error --workers 2 --worker-states "done,fail"
+```
+
+#### f) パターンC（worktree）の場合
+
+起動時:
+```bash
+bash $UPDATE_SCRIPT C active --worktrees 3 --workflow heavy
+```
+
+完了時:
+```bash
+bash $UPDATE_SCRIPT idle waiting
+```
+
+---
+
 ## 待機プロトコル
 
 タスク配信後・報告後は必ず以下を実行:

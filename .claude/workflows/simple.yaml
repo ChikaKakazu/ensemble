@@ -1,0 +1,41 @@
+name: simple
+description: |
+  軽量ワークフロー。README更新、typo修正など軽微な変更向け。
+  レビューは1回、修正ループなし。
+max_iterations: 5
+cost_level: low
+
+steps:
+  - name: plan
+    description: 簡易計画の策定
+    agent: conductor
+    mode: plan
+    thinking: false
+    outputs:
+      - plan.md
+    transitions:
+      - condition: plan_approved
+        next_step: execute
+      - condition: needs_clarification
+        next_step: PAUSE
+
+  - name: execute
+    description: タスクの直接実行
+    agent: conductor
+    mode: execute
+    allow_parallel: false
+    allow_worktree: false
+    transitions:
+      - condition: execution_complete
+        next_step: review
+      - condition: blocked
+        next_step: plan
+
+  - name: review
+    description: 簡易レビュー（1回のみ）
+    agent: reviewer
+    transitions:
+      - condition: approved
+        next_step: COMPLETE
+      - condition: needs_fix
+        next_step: execute

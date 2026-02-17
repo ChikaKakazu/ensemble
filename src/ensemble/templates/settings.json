@@ -43,7 +43,7 @@
             "type": "command",
             "command": "bash .claude/hooks/scripts/session-scan.sh",
             "statusMessage": "Codebase scan",
-            "timeout": 15000
+            "timeout": 30000
           }
         ]
       }
