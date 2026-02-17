@@ -1,3 +1,8 @@
+---
+name: testing
+description: Test creation, execution, and coverage improvement with pytest. Covers TDD workflow, fixtures, parameterized tests, mocking, and unit/integration/E2E testing.
+---
+
 # Testing Skill
 
 ## 概要

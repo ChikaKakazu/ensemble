@@ -1,3 +1,8 @@
+---
+name: backend-api
+description: RESTful API design, implementation, error handling, pagination, security, and logging best practices for Python/FastAPI backends.
+---
+
 # Backend API Skill
 
 ## 概要

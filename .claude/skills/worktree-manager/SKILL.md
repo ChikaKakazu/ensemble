@@ -1,3 +1,8 @@
+---
+name: worktree-manager
+description: Git worktree management for parallel development. Create, manage, merge worktrees and resolve conflicts for independent feature branches.
+---
+
 # worktree-manager
 
 Git worktreeを使った並列開発を管理するスキル。
