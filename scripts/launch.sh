@@ -100,10 +100,11 @@ echo "Starting Conductor (Opus, no thinking)..."
 tmux send-keys -t "$CONDUCTOR_PANE" \
     "MAX_THINKING_TOKENS=0 claude --agent conductor --model opus --dangerously-skip-permissions" C-m
 
-# dashboard (less +F for live following, Ctrl+C to pause, F to resume)
+# dashboard (watch for periodic refresh, Ctrl+C to stop)
 echo "Starting Dashboard monitor (in conductor session)..."
 tmux send-keys -t "$DASHBOARD_PANE" \
-    "less +F .ensemble/status/dashboard.md" C-m
+    "watch -n 5 -t cat status/dashboard.md"
+tmux send-keys -t "$DASHBOARD_PANE" C-m
 
 # dashboardペインを上下に分割（上60%: dashboard、下40%: mode-viz）
 MODE_VIZ_PANE=$(tmux split-window -v -t "$DASHBOARD_PANE" -c "$PROJECT_DIR" -l 40% -P -F '#{pane_id}')
