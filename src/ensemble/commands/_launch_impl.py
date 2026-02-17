@@ -1,6 +1,7 @@
 """Implementation of the ensemble launch command."""
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -14,13 +15,32 @@ from ensemble.inbox import InboxWatcher
 from ensemble.templates import get_template_path
 
 
-def run_launch(session: str = "ensemble", attach: bool = True) -> None:
+def _sanitize_session_name(name: str) -> str:
+    """Sanitize a string for use as a tmux session name.
+
+    Replaces characters not allowed in tmux session names (dots, colons) with hyphens.
+
+    Args:
+        name: The raw name to sanitize.
+
+    Returns:
+        A sanitized name safe for use as a tmux session name.
+    """
+    return re.sub(r'[.:]', '-', name)
+
+
+def run_launch(session: Optional[str] = None, attach: bool = True) -> None:
     """Run the launch command implementation.
 
     Args:
         session: Base name for the tmux sessions (will create {session}-conductor and {session}-workers).
+                 Defaults to current directory name (with unsafe characters replaced by hyphens).
         attach: Whether to attach to the session after creation.
     """
+    # Derive session name from current directory if not specified
+    if session is None:
+        session = _sanitize_session_name(Path.cwd().name)
+
     # Check prerequisites
     if not _check_tmux():
         click.echo(click.style("Error: tmux is not installed or not in PATH", fg="red"))

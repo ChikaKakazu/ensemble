@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-SESSION_BASE="${SESSION_BASE:-ensemble}"
+SESSION_BASE="${SESSION_BASE:-$(basename "$(pwd)" | tr '.:' '--')}"
 SESSION_CONDUCTOR="${SESSION_BASE}-conductor"
 SESSION_WORKERS="${SESSION_BASE}-workers"
 PROJECT_DIR="${PROJECT_DIR:-$(pwd)}"
@@ -122,10 +122,10 @@ tmux send-keys -t "$DASHBOARD_PANE" Enter
 MODE_VIZ_PANE=$(tmux split-window -v -t "$DASHBOARD_PANE" -c "$PROJECT_DIR" -l 40% -P -F '#{pane_id}')
 echo "  Mode visualizer pane: $MODE_VIZ_PANE"
 
-# mode-viz用: update-mode.shの出力を定期表示
+# mode-viz用: アニメーション付きモード表示
 echo "Starting Mode Visualizer..."
 tmux send-keys -t "$MODE_VIZ_PANE" \
-    "watch -n 3 -t cat .ensemble/status/mode.md"
+    "bash ${SCRIPTS_DIR:+$SCRIPTS_DIR/}mode-viz.sh"
 sleep 1
 tmux send-keys -t "$MODE_VIZ_PANE" Enter
 

@@ -17,6 +17,15 @@ PROJECT_DIR="${PROJECT_DIR:-$(pwd)}"
 LOG_DIR="$PROJECT_DIR/logs"
 QUEUE_DIR="$PROJECT_DIR/queue"
 
+# スクリプトディレクトリの解決（.claude/scripts/ を優先、scripts/ にフォールバック）
+if [ -d "$PROJECT_DIR/.claude/scripts" ]; then
+    SCRIPTS_DIR="$PROJECT_DIR/.claude/scripts"
+elif [ -d "$PROJECT_DIR/scripts" ]; then
+    SCRIPTS_DIR="$PROJECT_DIR/scripts"
+else
+    SCRIPTS_DIR=""
+fi
+
 # Agent Teams モード検出
 AGENT_TEAMS_MODE="${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS:-0}"
 if [ "$AGENT_TEAMS_MODE" = "1" ]; then
@@ -32,6 +41,9 @@ mkdir -p "$LOG_DIR"
 
 # キューディレクトリ作成
 mkdir -p "$QUEUE_DIR/tasks" "$QUEUE_DIR/processing" "$QUEUE_DIR/reports" "$QUEUE_DIR/ack" "$QUEUE_DIR/conductor"
+
+# ステータスディレクトリ作成
+mkdir -p "$PROJECT_DIR/status"
 
 # 既存セッションがあれば削除
 if tmux has-session -t "$SESSION_CONDUCTOR" 2>/dev/null; then
@@ -79,8 +91,8 @@ echo "  Dashboard pane: $DASHBOARD_PANE"
 
 # 初期モード表示ファイルの作成
 mkdir -p "$PROJECT_DIR/.ensemble/status"
-if [ -f "$PROJECT_DIR/scripts/update-mode.sh" ]; then
-    bash "$PROJECT_DIR/scripts/update-mode.sh" idle waiting
+if [ -n "$SCRIPTS_DIR" ] && [ -f "$SCRIPTS_DIR/update-mode.sh" ]; then
+    bash "$SCRIPTS_DIR/update-mode.sh" idle waiting
 else
     # フォールバック: シンプルなIDLE表示
     cat > "$PROJECT_DIR/.ensemble/status/mode.md" << 'MODEEOF'
@@ -92,19 +104,19 @@ else
 MODEEOF
 fi
 
-# シェルの初期化を待つ
-sleep 2
-
 # conductor (--agent でエージェント定義をロード)
 echo "Starting Conductor (Opus, no thinking)..."
 tmux send-keys -t "$CONDUCTOR_PANE" \
-    "MAX_THINKING_TOKENS=0 claude --agent conductor --model opus --dangerously-skip-permissions" C-m
+    "MAX_THINKING_TOKENS=0 claude --agent conductor --model opus --dangerously-skip-permissions"
+sleep 1
+tmux send-keys -t "$CONDUCTOR_PANE" Enter
 
 # dashboard (watch for periodic refresh, Ctrl+C to stop)
 echo "Starting Dashboard monitor (in conductor session)..."
 tmux send-keys -t "$DASHBOARD_PANE" \
     "watch -n 5 -t cat status/dashboard.md"
-tmux send-keys -t "$DASHBOARD_PANE" C-m
+sleep 1
+tmux send-keys -t "$DASHBOARD_PANE" Enter
 
 # dashboardペインを上下に分割（上60%: dashboard、下40%: mode-viz）
 MODE_VIZ_PANE=$(tmux split-window -v -t "$DASHBOARD_PANE" -c "$PROJECT_DIR" -l 40% -P -F '#{pane_id}')
@@ -113,7 +125,9 @@ echo "  Mode visualizer pane: $MODE_VIZ_PANE"
 # mode-viz用: アニメーション付きモード表示
 echo "Starting Mode Visualizer..."
 tmux send-keys -t "$MODE_VIZ_PANE" \
-    "bash scripts/mode-viz.sh" C-m
+    "bash .claude/scripts/mode-viz.sh"
+sleep 1
+tmux send-keys -t "$MODE_VIZ_PANE" Enter
 
 # conductorペインを選択
 tmux select-pane -t "$CONDUCTOR_PANE"
@@ -138,20 +152,21 @@ echo "  Worker area pane: $WORKER_AREA_PANE"
 # DISPATCH_PANE: dispatch (左、フルハイト)
 # WORKER_AREA_PANE: ワーカー用プレースホルダー (右、フルハイト)
 
-# シェルの初期化を待つ
-sleep 2
-
 # dispatch (--agent でエージェント定義をロード)
 echo "Starting Dispatch (Sonnet)..."
 tmux send-keys -t "$DISPATCH_PANE" \
-    "claude --agent dispatch --model sonnet --dangerously-skip-permissions" C-m
+    "claude --agent dispatch --model sonnet --dangerously-skip-permissions"
+sleep 1
+tmux send-keys -t "$DISPATCH_PANE" Enter
 
 # フレンドリーファイア防止
 sleep 3
 
 # 右側のプレースホルダーにメッセージ表示
 tmux send-keys -t "$WORKER_AREA_PANE" \
-    "echo '=== Worker Area ===' && echo 'Run: ./scripts/pane-setup.sh [count]' && echo 'to add workers here.'" C-m
+    "echo '=== Worker Area ===' && echo 'Run: .claude/scripts/pane-setup.sh [count]' && echo 'to add workers here.'"
+sleep 1
+tmux send-keys -t "$WORKER_AREA_PANE" Enter
 
 # dispatchペインを選択
 tmux select-pane -t "$DISPATCH_PANE"
@@ -179,6 +194,24 @@ AGENT_TEAMS_MODE=$AGENT_TEAMS_MODE
 # tmux send-keys -t "\$CONDUCTOR_PANE" 'message' Enter
 # tmux send-keys -t "\$DISPATCH_PANE" 'message' Enter
 EOF
+
+# inbox_watcher.shをバックグラウンドで起動
+echo "Starting inbox_watcher..."
+if [ -n "$SCRIPTS_DIR" ] && [ -f "$SCRIPTS_DIR/inbox_watcher.sh" ]; then
+    INBOX_SCRIPT="$SCRIPTS_DIR/inbox_watcher.sh"
+else
+    echo "Warning: inbox_watcher.sh not found. Event-driven notifications disabled."
+    INBOX_SCRIPT=""
+fi
+
+if [ -n "$INBOX_SCRIPT" ]; then
+    PROJECT_DIR="$PROJECT_DIR" bash "$INBOX_SCRIPT" &
+    INBOX_WATCHER_PID=$!
+    echo "  inbox_watcher started (PID: $INBOX_WATCHER_PID)"
+
+    # tmux終了時にinbox_watcherも終了するようtrap設定
+    trap "kill $INBOX_WATCHER_PID 2>/dev/null || true" EXIT
+fi
 
 echo ""
 echo "=========================================="
@@ -209,7 +242,7 @@ echo "To view both simultaneously, open two terminal windows:"
 echo "  Terminal 1: tmux attach -t $SESSION_CONDUCTOR"
 echo "  Terminal 2: tmux attach -t $SESSION_WORKERS"
 echo ""
-echo "Add workers: ./scripts/pane-setup.sh [count]"
+echo "Add workers: .claude/scripts/pane-setup.sh [count]"
 echo ""
 if [ "$AGENT_TEAMS_MODE" = "1" ]; then
     echo "=== Agent Teams Mode ==="

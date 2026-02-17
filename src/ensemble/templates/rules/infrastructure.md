@@ -4,13 +4,17 @@
 
 | Item | Name | Description |
 |------|------|-------------|
-| Session 1 | `ensemble-conductor` | Conductor + Dashboard |
-| Session 2 | `ensemble-workers` | Dispatch + Workers |
+| Session 1 | `{project-name}-conductor` | Conductor + Dashboard |
+| Session 2 | `{project-name}-workers` | Dispatch + Workers |
 | Window | `main` | Both sessions |
+
+Note: Project name is derived from the current directory name (dots and colons replaced with hyphens).
+Example: directory `my.project` → sessions `my-project-conductor` / `my-project-workers`
+You can also specify explicitly with `ensemble launch --session NAME`.
 
 ## Pane Layout
 
-**Session 1: ensemble-conductor**
+**Session 1: {project-name}-conductor**
 ```
 +------------------+------------------+
 |   Conductor      |   dashboard      |
@@ -19,7 +23,7 @@
 +------------------+------------------+
 ```
 
-**Session 2: ensemble-workers**
+**Session 2: {project-name}-workers**
 ```
 +------------------+------------------+
 |   dispatch       |   worker-1       |
@@ -39,5 +43,5 @@ tmux send-keys -t "$CONDUCTOR_PANE" 'message'
 tmux send-keys -t "$CONDUCTOR_PANE" Enter
 
 # Wrong: Do NOT use pane numbers directly
-tmux send-keys -t ensemble-conductor:main.0 'message' Enter
+tmux send-keys -t {project-name}-conductor:main.0 'message' Enter
 ```

@@ -103,7 +103,10 @@ your-project/
 | `ensemble launch` | 2つのtmuxセッションを起動してアタッチ |
 | `ensemble launch --session NAME` | セッション名のベースを指定（NAME-conductor, NAME-workers） |
 | `ensemble launch --no-attach` | セッションを起動するがアタッチしない |
-| `ensemble upgrade` | テンプレートの更新を同期（agents, commands, scripts） |
+| `ensemble upgrade` | テンプレートの更新を同期（agents, commands, scripts等） |
+| `ensemble upgrade --dry-run` | 更新内容を確認（変更なし） |
+| `ensemble upgrade --force` | ローカル変更済みファイルもバックアップ付きで上書き |
+| `ensemble upgrade --diff` | 更新前にdiffを表示 |
 | `ensemble --version` | バージョンを表示 |
 | `ensemble --help` | ヘルプを表示 |
 
@@ -282,10 +285,12 @@ cd my-project
 ensemble init
 
 # tmuxセッション起動（2つのセッションが作成される）
+# セッション名はディレクトリ名から自動生成される
 ensemble launch
 
-# 別のターミナルでworkersセッションを監視
-tmux attach -t ensemble-workers
+# 別のターミナルでworkersセッションを監視（セッション名は自動生成）
+source .ensemble/panes.env
+tmux attach -t "$WORKERS_SESSION"
 
 # Conductorセッションでタスク実行
 /go hello worldを出力するPythonスクリプトを作成して
@@ -400,13 +405,19 @@ Worker 4名追加後:
 ### セッションへの接続
 
 2つの独立したセッションなので、**2つのターミナルウィンドウ**で同時に監視できます。
+セッション名はカレントディレクトリ名から自動生成されます（ドット・コロンはハイフンに置換）。
 
 ```bash
+# セッション名を確認
+source .ensemble/panes.env
+echo "$CONDUCTOR_SESSION"  # 例: my-project-conductor
+echo "$WORKERS_SESSION"    # 例: my-project-workers
+
 # ターミナル1: Conductorセッション（操作 + ダッシュボード監視）
-tmux attach -t ensemble-conductor
+tmux attach -t "$CONDUCTOR_SESSION"
 
 # ターミナル2: Workersセッション（Dispatch + Workers）
-tmux attach -t ensemble-workers
+tmux attach -t "$WORKERS_SESSION"
 ```
 
 ### ペイン構成
@@ -558,6 +569,61 @@ result = classify_and_recommend("認証システムを設計")
 
 - L1-L3（Remember/Understand/Apply）→ Sonnet
 - L4-L6（Analyze/Evaluate/Create）→ Opus
+
+---
+
+## アップグレード
+
+### パッケージ本体の更新
+
+Ensembleのコアロジック（自律ループ、パイプライン、スキャナ等）はPythonパッケージに含まれます。
+パッケージの更新には `pip` または `uv` を使用してください。
+
+```bash
+# グローバルインストールの場合
+uv tool upgrade ensemble-claude
+
+# プロジェクト依存の場合
+uv add --upgrade ensemble-claude
+```
+
+### テンプレートファイルの更新
+
+エージェント定義やコマンド定義（`.claude/` 配下）は `ensemble upgrade` で更新します。
+
+```bash
+# 更新可能なファイルを確認（変更なし）
+ensemble upgrade --dry-run
+
+# 差分を確認してから適用
+ensemble upgrade --diff
+
+# 適用（ローカル未変更のファイルのみ）
+ensemble upgrade
+
+# ローカル変更済みファイルも含めて強制更新（バックアップ作成）
+ensemble upgrade --force
+```
+
+**更新対象カテゴリ:**
+
+| カテゴリ | パス | 説明 |
+|---------|------|------|
+| agents | .claude/agents/*.md | エージェント定義 |
+| commands | .claude/commands/*.md | スラッシュコマンド |
+| scripts | .claude/scripts/*.sh | シェルスクリプト |
+| workflows | .claude/workflows/*.yaml | ワークフロー定義 |
+| instructions | .claude/instructions/*.md | フェーズ指示 |
+| policies | .claude/policies/*.md | ポリシー |
+| personas | .claude/personas/*.md | ペルソナ定義 |
+| rules | .claude/rules/*.md | ルール |
+| hooks | .claude/hooks/scripts/*.sh | フック |
+| settings | .claude/settings.json | 設定 |
+
+**注意:**
+- ローカルで変更したファイルはデフォルトでスキップされます（`--force`で上書き可能、バックアップ自動作成）
+- `ensemble init --full` を実行していないプロジェクトでは `ensemble upgrade` は動作しません
+- `.gitignore` やPythonコアロジックの更新はパッケージ更新（`uv tool upgrade ensemble-claude`）で反映されます
 
 ---
 

@@ -1,3 +1,8 @@
+---
+name: database-migration
+description: Database schema changes, migration creation/execution/rollback with Alembic, Django, and Prisma. Covers zero-downtime migrations and safe schema change patterns.
+---
+
 # Database Migration Skill
 
 ## 概要

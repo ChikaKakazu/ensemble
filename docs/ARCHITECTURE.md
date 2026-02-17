@@ -21,7 +21,7 @@ Ensembleは**複数のClaude CLIインスタンスをtmuxで並列実行**し、
 │                     Ensemble Architecture                        │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                   │
-│   [Session 1: ensemble-conductor]                                │
+│   [Session 1: {プロジェクト名}-conductor]                        │
 │   ┌─────────────────────┬─────────────────────┐                 │
 │   │    Conductor        │     dashboard       │                 │
 │   │    (Claude Opus)    │   (watch status)    │                 │
@@ -29,7 +29,7 @@ Ensembleは**複数のClaude CLIインスタンスをtmuxで並列実行**し、
 │                           │                                       │
 │                           │ ファイルベース通信 (queue/)           │
 │                           ▼                                       │
-│   [Session 2: ensemble-workers]                                  │
+│   [Session 2: {プロジェクト名}-workers]                          │
 │   ┌─────────────────────┬──────────┐                             │
 │   │                     │ worker-1 │                             │
 │   │    Dispatch         ├──────────┤                             │
@@ -47,16 +47,20 @@ Ensembleは2つの独立したtmuxセッションで動作します。
 
 | セッション | 用途 | ペイン構成 |
 |-----------|------|-----------|
-| `ensemble-conductor` | 指揮・監視 | Conductor + Dashboard |
-| `ensemble-workers` | 実行 | Dispatch + Worker群 |
+| `{プロジェクト名}-conductor` | 指揮・監視 | Conductor + Dashboard |
+| `{プロジェクト名}-workers` | 実行 | Dispatch + Worker群 |
+
+※ プロジェクト名はカレントディレクトリ名（ドット・コロンはハイフンに置換）。`ensemble launch --session NAME` で明示指定も可能。
 
 ```bash
-# 2つのターミナルで同時表示
+# 2つのターミナルで同時表示（panes.envからセッション名を確認）
+source .ensemble/panes.env
+
 # ターミナル1
-tmux attach -t ensemble-conductor
+tmux attach -t "$CONDUCTOR_SESSION"
 
 # ターミナル2
-tmux attach -t ensemble-workers
+tmux attach -t "$WORKERS_SESSION"
 ```
 
 ---
@@ -756,9 +760,9 @@ project/
 
 ```bash
 # Ensemble pane IDs (auto-generated)
-# Session names
-CONDUCTOR_SESSION=ensemble-conductor
-WORKERS_SESSION=ensemble-workers
+# Session names (derived from project directory name)
+CONDUCTOR_SESSION={プロジェクト名}-conductor
+WORKERS_SESSION={プロジェクト名}-workers
 
 # Pane IDs (use these with tmux send-keys -t)
 CONDUCTOR_PANE=%0

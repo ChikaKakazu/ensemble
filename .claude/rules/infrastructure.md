@@ -30,9 +30,13 @@ Criticalエスカレーションとなり、手動対応が必要になった。
 
 | 項目 | 名前 | 説明 |
 |------|------|------|
-| セッション1 | `ensemble-conductor` | Conductor + Dashboard |
-| セッション2 | `ensemble-workers` | Dispatch + Workers |
+| セッション1 | `{プロジェクト名}-conductor` | Conductor + Dashboard |
+| セッション2 | `{プロジェクト名}-workers` | Dispatch + Workers |
 | ウィンドウ名 | `main` | 両セッションとも |
+
+※ プロジェクト名はカレントディレクトリ名（ドット・コロンはハイフンに置換）。
+例: ディレクトリ名 `my.project` → セッション名 `my-project-conductor` / `my-project-workers`
+`ensemble launch --session NAME` で明示指定も可能。
 
 ## Ensembleエージェント一覧
 
@@ -48,7 +52,7 @@ Criticalエスカレーションとなり、手動対応が必要になった。
 
 ## ペインレイアウト
 
-**Session 1: ensemble-conductor**
+**Session 1: {プロジェクト名}-conductor**
 ```
 +------------------+------------------+
 |   Conductor      |   dashboard      |
@@ -57,7 +61,7 @@ Criticalエスカレーションとなり、手動対応が必要になった。
 +------------------+------------------+
 ```
 
-**Session 2: ensemble-workers**
+**Session 2: {プロジェクト名}-workers**
 ```
 +------------------+------------------+
 |   dispatch       |   worker-1       |
@@ -71,9 +75,9 @@ Criticalエスカレーションとなり、手動対応が必要になった。
 ## ペインID環境変数（.ensemble/panes.env）
 
 ```bash
-# セッション名
-CONDUCTOR_SESSION=ensemble-conductor
-WORKERS_SESSION=ensemble-workers
+# セッション名（プロジェクト名から自動生成）
+CONDUCTOR_SESSION={プロジェクト名}-conductor
+WORKERS_SESSION={プロジェクト名}-workers
 
 # ペインID（tmux send-keys -t で使用）
 CONDUCTOR_PANE=%0      # Conductorペイン
@@ -106,7 +110,8 @@ tmux list-sessions
 # ペイン一覧（全セッション）
 tmux list-panes -a -F '#{session_name}:#{window_name}.#{pane_id} #{pane_title}'
 
-# 特定セッションのペイン
-tmux list-panes -t ensemble-conductor -F '#{pane_id} #{pane_current_command}'
-tmux list-panes -t ensemble-workers -F '#{pane_id} #{pane_current_command}'
+# 特定セッションのペイン（panes.envからセッション名を取得）
+source .ensemble/panes.env
+tmux list-panes -t "$CONDUCTOR_SESSION" -F '#{pane_id} #{pane_current_command}'
+tmux list-panes -t "$WORKERS_SESSION" -F '#{pane_id} #{pane_current_command}'
 ```

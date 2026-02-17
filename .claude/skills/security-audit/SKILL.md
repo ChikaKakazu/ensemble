@@ -1,3 +1,8 @@
+---
+name: security-audit
+description: Security auditing based on OWASP Top 10, injection prevention, authentication/authorization, XSS/CSRF protection, rate limiting, and security headers.
+---
+
 # Security Audit Skill
 
 ## 概要

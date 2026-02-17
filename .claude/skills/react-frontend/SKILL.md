@@ -1,3 +1,8 @@
+---
+name: react-frontend
+description: React/Next.js component design, hooks, state management, performance optimization, and accessibility best practices for frontend development.
+---
+
 # React Frontend Skill
 
 ## 概要
