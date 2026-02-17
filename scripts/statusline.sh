@@ -5,14 +5,20 @@
 # 現在のgitブランチ
 branch=$(git branch --show-current 2>/dev/null || echo "no-branch")
 
-# tmuxセッション状態
-if tmux has-session -t ensemble-conductor 2>/dev/null; then
+# panes.envからセッション名を取得
+if [ -f ".ensemble/panes.env" ]; then
+    # shellcheck disable=SC1091
+    source ".ensemble/panes.env" 2>/dev/null || true
+fi
+
+# tmuxセッション状態（panes.envのセッション名を使用）
+if [ -n "${CONDUCTOR_SESSION:-}" ] && tmux has-session -t "$CONDUCTOR_SESSION" 2>/dev/null; then
     conductor="✓"
 else
     conductor="✗"
 fi
 
-if tmux has-session -t ensemble-workers 2>/dev/null; then
+if [ -n "${WORKERS_SESSION:-}" ] && tmux has-session -t "$WORKERS_SESSION" 2>/dev/null; then
     workers="✓"
 else
     workers="✗"

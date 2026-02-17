@@ -7,8 +7,8 @@ import click
 @click.option(
     "--session",
     "-s",
-    default="ensemble",
-    help="Name of the tmux session to create.",
+    default=None,
+    help="Name of the tmux session to create. Defaults to current directory name.",
 )
 @click.option(
     "--attach/--no-attach",

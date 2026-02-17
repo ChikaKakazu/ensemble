@@ -285,10 +285,12 @@ cd my-project
 ensemble init
 
 # tmuxセッション起動（2つのセッションが作成される）
+# セッション名はディレクトリ名から自動生成される
 ensemble launch
 
-# 別のターミナルでworkersセッションを監視
-tmux attach -t ensemble-workers
+# 別のターミナルでworkersセッションを監視（セッション名は自動生成）
+source .ensemble/panes.env
+tmux attach -t "$WORKERS_SESSION"
 
 # Conductorセッションでタスク実行
 /go hello worldを出力するPythonスクリプトを作成して
@@ -403,13 +405,19 @@ Worker 4名追加後:
 ### セッションへの接続
 
 2つの独立したセッションなので、**2つのターミナルウィンドウ**で同時に監視できます。
+セッション名はカレントディレクトリ名から自動生成されます（ドット・コロンはハイフンに置換）。
 
 ```bash
+# セッション名を確認
+source .ensemble/panes.env
+echo "$CONDUCTOR_SESSION"  # 例: my-project-conductor
+echo "$WORKERS_SESSION"    # 例: my-project-workers
+
 # ターミナル1: Conductorセッション（操作 + ダッシュボード監視）
-tmux attach -t ensemble-conductor
+tmux attach -t "$CONDUCTOR_SESSION"
 
 # ターミナル2: Workersセッション（Dispatch + Workers）
-tmux attach -t ensemble-workers
+tmux attach -t "$WORKERS_SESSION"
 ```
 
 ### ペイン構成

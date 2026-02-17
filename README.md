@@ -89,10 +89,13 @@ pip install -e .
 ensemble init
 
 # 2. Launch the tmux sessions (2 separate sessions)
+# Session names are derived from the current directory name
 ensemble launch
 
 # 3. Open another terminal to view workers session
-tmux attach -t ensemble-workers
+# Check your session name from .ensemble/panes.env
+source .ensemble/panes.env
+tmux attach -t "$WORKERS_SESSION"
 
 # 4. Run a task in the Conductor session
 /go implement user authentication
