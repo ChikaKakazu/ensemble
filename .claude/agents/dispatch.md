@@ -209,6 +209,7 @@ Dispatchは以下の場合に行動を開始する:
 type: start_workers  # or start_worktree or start_agent_teams
 worker_count: 2
 worker_agent: worker  # オプション: 専門agentを指定（デフォルトは worker）
+worker_isolation: worktree  # オプション: Claude Code公式worktree isolation（パターンC）
 tasks:
   - id: task-001
     instruction: "タスクの説明"
@@ -510,6 +511,19 @@ bash $UPDATE_SCRIPT C active --worktrees 3 --workflow heavy
 ```bash
 bash $UPDATE_SCRIPT idle waiting
 ```
+
+#### パターンC worktree起動手順
+
+`worker_isolation: worktree` が指定されている場合:
+1. pane-setup.shでワーカーペインを起動する際、`--agent worker` に加えて
+   workerエージェントのYAMLフロントマターに `isolation: worktree` が設定されていることを確認
+2. Claude Code公式のworktree isolation機能により、各ワーカーが自動的に
+   隔離されたgit worktreeで動作する
+3. worktree-create.shの手動実行は不要（公式機能が自動管理）
+
+フォールバック（公式isolationが利用できない場合）:
+1. worktree-create.sh を手動実行してworktreeを作成
+2. 各worktreeディレクトリでワーカーを起動
 
 ---
 

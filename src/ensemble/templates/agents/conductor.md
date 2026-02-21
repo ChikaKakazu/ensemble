@@ -39,10 +39,11 @@ model: opus
 - 並列可能な作業あり
 - 例: 複数エンドポイントの実装、テスト追加
 
-### パターンC: worktree分離
+### パターンC: worktree分離（公式isolation対応）
 - 機能が独立している
 - 変更ファイル数 > 10 または 複数ブランチ必要
 - 例: 認証・API・UIの同時開発
+- Claude Code 2.1.49+ の `isolation: worktree` を第一選択として使用
 
 ## Agent Teamsモード（T: 調査・レビュー専用）
 
@@ -124,12 +125,14 @@ Dispatchに指示を送り、ワーカーペインを起動させる。
 4. 完了を待つ（Dispatchからのsend-keysは来ない。status/dashboard.mdを確認）
 ```
 
-### パターンC: shogun方式（worktree）
+### パターンC: shogun方式（worktree + 公式isolation）
 
 ```
-1. 同様にdispatch-instruction.yamlに指示を書く
+1. queue/conductor/dispatch-instruction.yamlに指示を書く
 2. type: start_worktree を指定
-3. Dispatchがworktree-create.shを実行
+3. worker_isolation: worktree を追加（Claude Code公式機能を使用）
+4. Dispatchがworkerを `isolation: worktree` 付きで起動
+5. フォールバック: 公式機能が使えない場合、worktree-create.shで手動作成
 ```
 
 ### Agent Teamsモード実行方法（調査・レビュー専用）
@@ -242,6 +245,12 @@ ConductorがTeam Leadとして直接操作。Dispatch/queue不要。
    - 失敗した場合のみConductorに報告
 3. マージ後、各worktreeのCoderが「自分以外の変更」をレビュー（相互レビュー）
 4. 全員承認で完了
+
+### Claude Code公式worktree isolation利用時
+- Worker agentが `isolation: worktree` で自動的にworktreeを作成
+- 変更がないworktreeは自動クリーンアップ（マージ不要）
+- 変更があるworktreeのみIntegratorがマージ
+- `WorktreeCreate`/`WorktreeRemove` フックでログ記録
 
 ## 重要な設計判断のプロトコル
 

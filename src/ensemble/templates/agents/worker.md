@@ -165,6 +165,28 @@ tmux send-keys -t "$DISPATCH_PANE" Enter
 | 「queue/tasks/worker-N-task.yaml を確認」 | Dispatch | タスクファイルを読み実行 |
 | 「queue/tasks/を確認」 | Dispatch | 自分のタスクファイルを探して実行 |
 
+## Worktree Isolation（パターンC対応）
+
+パターンCでは、Claude Code公式の `isolation: worktree` 機能を活用する。
+
+### 公式worktree isolation
+Worker agentが `isolation: worktree` で起動された場合:
+- 自動的に一時的なgit worktreeが作成される
+- メインリポジトリとは独立した作業環境で実行される
+- 変更がなければworktreeは自動クリーンアップされる
+- 変更がある場合はworktreeが保持され、Integratorがマージを担当する
+
+### Workerの責務（worktree内）
+1. 割り当てられた機能を実装する
+2. テストを実行し、品質を確認する
+3. コミットは細かく行う（worktree内のブランチにコミット）
+4. 完了したらqueue/reports/に報告する（通常と同じプロトコル）
+
+### 注意事項
+- worktreeの作成・削除はClaude Codeが自動管理する（手動操作不要）
+- `.claude/agents/`や`.claude/skills/`はメインリポジトリから自動参照される
+- worktree内でも通常のタスク実行フロー・報告プロトコルに従う
+
 ## subagent活用
 
 担当ファイルが複数ある場合、Worker内でsubagentを使って並列処理できる。
