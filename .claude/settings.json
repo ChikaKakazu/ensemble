@@ -77,6 +77,30 @@
           }
         ]
       }
+    ],
+    "WorktreeCreate": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/scripts/notify-worktree.sh",
+            "statusMessage": "Worktree作成ログ記録",
+            "timeout": 3000
+          }
+        ]
+      }
+    ],
+    "WorktreeRemove": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/scripts/notify-worktree.sh",
+            "statusMessage": "Worktreeクリーンアップログ記録",
+            "timeout": 3000
+          }
+        ]
+      }
     ]
   },
   "statusLine": {

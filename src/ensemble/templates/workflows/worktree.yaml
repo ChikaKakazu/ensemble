@@ -3,6 +3,8 @@ description: |
   git worktree統合ワークフロー。
   複数の独立した機能を並列開発し、最終的にメインブランチに統合する。
   大規模タスク（パターンC）向け。
+  Claude Code 2.1.49+の公式 `isolation: worktree` を第一選択として使用。
+  公式機能が利用できない場合はworktree-create.shにフォールバック。
 max_iterations: 20
 cost_level: high
 
@@ -24,10 +26,15 @@ steps:
   - name: create_worktrees
     description: |
       計画に基づきworktreeを作成。
-      各worktreeで独立したブランチを用意。
+      Claude Code公式 isolation: worktree を第一選択として使用。
+      公式機能が使えない場合はworktree-create.shにフォールバック。
     agent: conductor
     mode: execute
     script: |
+      # 公式isolation: worktreeを使用する場合、
+      # Worker agentのYAMLフロントマターに isolation: worktree を指定すれば
+      # Claude Codeが自動的にworktreeを作成する。
+      # フォールバック: 手動worktree作成
       for branch in $WORKTREE_BRANCHES; do
         .claude/scripts/worktree-create.sh "$branch" main
       done
@@ -43,6 +50,7 @@ steps:
       - name: worktree-1
         agent: coder
         worktree: true
+        isolation: worktree  # Claude Code 2.1.49+ 公式機能
         rules:
           - condition: complete
           - condition: blocked
@@ -177,7 +185,10 @@ steps:
         next_step: security_review
 
   - name: cleanup
-    description: worktreeとブランチのクリーンアップ
+    description: |
+      worktreeとブランチのクリーンアップ。
+      公式isolation: worktreeの場合、変更なしのworktreeは自動クリーンアップ済み。
+      WorktreeRemoveフック（2.1.50+）がクリーンアップ時に発火する。
     agent: integrator
     mode: execute
     script: |

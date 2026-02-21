@@ -99,6 +99,30 @@ recommendation: |
 4. 結果をConductorに報告
 ```
 
+## Claude Code公式 worktree isolation との連携
+
+Claude Code 2.1.49以降、agent定義で `isolation: worktree` を指定すると
+自動的にgit worktreeが作成・管理される。
+
+### 公式worktreeからのマージ
+公式worktreeの場合も、マージ手順は従来と同じ:
+1. worktreeブランチを特定（`git worktree list` で確認）
+2. メインブランチにマージ（`git merge --no-ff`）
+3. コンフリクト解決（自動解決基準に従う）
+4. 変更のないworktreeは自動クリーンアップ済み（マージ不要）
+
+### 従来スクリプトとの使い分け
+| 方式 | 用途 |
+|------|------|
+| 公式 `isolation: worktree` | Worker起動時の自動worktree作成（推奨） |
+| `worktree-create.sh` | 手動worktree作成（フォールバック） |
+| `worktree-merge.sh` | マージ実行（公式・手動共通で使用可能） |
+
+### WorktreeCreate/WorktreeRemove フック
+Claude Code 2.1.50で追加されたフックイベント:
+- `WorktreeCreate`: worktree作成時に発火（ログ記録・ダッシュボード更新に利用可能）
+- `WorktreeRemove`: worktree削除時に発火（クリーンアップ確認に利用可能）
+
 ## worktree操作コマンド
 
 ```bash
